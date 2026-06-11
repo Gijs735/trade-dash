@@ -37,27 +37,31 @@ jobs:
             --exclude 'README.md' \
             ./ _site/
 
+      - name: Install AzCopy
+        run: |
+          curl -sL https://aka.ms/downloadazcopy-v10-linux -o azcopy.tar.gz
+          tar -xf azcopy.tar.gz
+          sudo cp ./azcopy_linux_amd64_*/azcopy /usr/local/bin/azcopy
+          azcopy --version
+
       - name: Deploy to Azure Storage
-        uses: azure/cli@v2
         env:
-          AZURE_CORE_OUTPUT: none
           AZURE_STORAGE_ACCOUNT: ${{ secrets.AZURE_STORAGE_ACCOUNT }}
           AZURE_STORAGE_SAS_TOKEN: ${{ secrets.AZURE_STORAGE_SAS_TOKEN }}
-        with:
-          azcliversion: latest
-          inlineScript: |
-            set -euo pipefail
+        run: |
+          set -euo pipefail
 
-            : "${AZURE_STORAGE_ACCOUNT:?Set the AZURE_STORAGE_ACCOUNT repository secret.}"
-            : "${AZURE_STORAGE_SAS_TOKEN:?Set the AZURE_STORAGE_SAS_TOKEN repository secret.}"
-            : "${AZURE_STORAGE_CONTAINER:?Set AZURE_STORAGE_CONTAINER or leave it unset to use the default static website container.}"
+          : "${AZURE_STORAGE_ACCOUNT:?Set the AZURE_STORAGE_ACCOUNT repository secret.}"
+          : "${AZURE_STORAGE_SAS_TOKEN:?Set the AZURE_STORAGE_SAS_TOKEN repository secret.}"
+          : "${AZURE_STORAGE_CONTAINER:?Set AZURE_STORAGE_CONTAINER or leave it unset to use the default static website container.}"
 
-            sas_token="${AZURE_STORAGE_SAS_TOKEN#\?}"
-            connection_string="BlobEndpoint=https://${AZURE_STORAGE_ACCOUNT}.blob.core.windows.net/;SharedAccessSignature=${sas_token}"
+          sas_token="${AZURE_STORAGE_SAS_TOKEN#\?}"
+          echo "::add-mask::$AZURE_STORAGE_SAS_TOKEN"
+          echo "::add-mask::$sas_token"
 
-            az storage blob sync \
-              --connection-string "$connection_string" \
-              --container "$AZURE_STORAGE_CONTAINER" \
-              --source "$GITHUB_WORKSPACE/_site" \
-              --delete-destination true \
-              --only-show-errors
+          destination_url="https://${AZURE_STORAGE_ACCOUNT}.blob.core.windows.net/${AZURE_STORAGE_CONTAINER}?${sas_token}"
+
+          azcopy sync "$GITHUB_WORKSPACE/_site" "$destination_url" \
+            --recursive=true \
+            --delete-destination=true \
+            --log-level=ERROR
