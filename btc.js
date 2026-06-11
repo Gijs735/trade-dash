@@ -640,9 +640,25 @@ function updateCurrentPriceLineColor() {
 }
 
 function getCurrentPriceMoveColor(candles) {
+    const move = getCandleMove(candles);
+    return !move || move.change >= 0 ? chartUpColor : chartDownColor;
+}
+
+function getCandleMove(candles) {
+    if (!candles.length) {
+        return null;
+    }
+
     const latest = candles[candles.length - 1];
     const previous = candles[candles.length - 2] ?? latest;
-    return latest.close >= previous.close ? chartUpColor : chartDownColor;
+    const change = latest.close - previous.close;
+    const percentChange = previous.close ? (change / previous.close) * 100 : 0;
+    return {
+        latest,
+        previous,
+        change,
+        percentChange
+    };
 }
 
 function updateEntryPriceLine() {
@@ -726,14 +742,13 @@ function setVisibleChartRange() {
 function updateChartOhlc() {
     const ohlcElement = document.getElementById('chartOhlc');
     const activeCandles = priceChartState.activeCandles;
-    if (!ohlcElement || activeCandles.length === 0) {
+    const move = getCandleMove(activeCandles);
+    updateChartMoveIndicator(move);
+    if (!ohlcElement || !move) {
         return;
     }
 
-    const latest = activeCandles[activeCandles.length - 1];
-    const previous = activeCandles[activeCandles.length - 2] ?? latest;
-    const change = latest.close - previous.close;
-    const percentChange = previous.close ? (change / previous.close) * 100 : 0;
+    const { latest, change, percentChange } = move;
     const color = change >= 0 ? chartUpColor : chartDownColor;
     const sign = change >= 0 ? '+' : '';
 
@@ -745,6 +760,28 @@ function updateChartOhlc() {
         `C${formatChartPrice(latest.close)}`,
         `${sign}${formatChartPrice(change)} (${sign}${percentChange.toFixed(2)}%)`
     ].join(' ');
+}
+
+function updateChartMoveIndicator(move) {
+    const indicator = document.getElementById('chartMoveIndicator');
+    if (!indicator) {
+        return;
+    }
+
+    if (!move) {
+        indicator.textContent = '--';
+        indicator.classList.remove('is-up', 'is-down');
+        indicator.removeAttribute('aria-label');
+        return;
+    }
+
+    const isUp = move.change >= 0;
+    const sign = isUp ? '+' : '';
+    const percentText = `${sign}${move.percentChange.toFixed(2)}%`;
+    indicator.textContent = percentText;
+    indicator.setAttribute('aria-label', `Active chart move ${percentText}`);
+    indicator.classList.toggle('is-up', isUp);
+    indicator.classList.toggle('is-down', !isUp);
 }
 
 function formatChartPrice(price) {

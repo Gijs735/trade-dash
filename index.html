@@ -71,6 +71,7 @@
                         <button class="chart-period-button is-active" type="button" data-chart-period="weekly">Weekly</button>
                         <span class="price-chart-meta">24M history</span>
                         <span>Live BTC/EUR</span>
+                        <span id="chartMoveIndicator" class="chart-move-indicator" aria-live="polite">--</span>
                     </div>
                     <div class="price-chart-heading">
                         <p>
@@ -125,7 +126,7 @@
     </section>
 </main>
 
-<script src="btc.js?v=23"></script>
+<script src="btc.js?v=24"></script>
 <script>
 const refreshIntervalMs = 10000;
 const timerElement = document.getElementById('timer');

@@ -267,6 +267,25 @@ h1 {
     color: var(--muted);
 }
 
+.price-chart-toolbar .chart-move-indicator {
+    margin-left: auto;
+    min-width: 74px;
+    border-color: rgba(255, 255, 255, 0.08);
+    color: #9ea4ad;
+}
+
+.price-chart-toolbar .chart-move-indicator.is-up {
+    border-color: rgba(74, 163, 140, 0.36);
+    background: rgba(74, 163, 140, 0.08);
+    color: #7ed1bb;
+}
+
+.price-chart-toolbar .chart-move-indicator.is-down {
+    border-color: rgba(239, 83, 80, 0.36);
+    background: rgba(239, 83, 80, 0.08);
+    color: #ff8a87;
+}
+
 .price-chart-heading {
     position: absolute;
     z-index: 2;
