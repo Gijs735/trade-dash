@@ -53,10 +53,10 @@ jobs:
             : "${AZURE_STORAGE_CONTAINER:?Set AZURE_STORAGE_CONTAINER or leave it unset to use the default static website container.}"
 
             sas_token="${AZURE_STORAGE_SAS_TOKEN#\?}"
+            connection_string="BlobEndpoint=https://${AZURE_STORAGE_ACCOUNT}.blob.core.windows.net/;SharedAccessSignature=${sas_token}"
 
             az storage blob sync \
-              --account-name "$AZURE_STORAGE_ACCOUNT" \
-              --sas-token "$sas_token" \
+              --connection-string "$connection_string" \
               --container "$AZURE_STORAGE_CONTAINER" \
               --source "$GITHUB_WORKSPACE/_site" \
               --delete-destination true \
