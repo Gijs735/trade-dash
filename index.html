@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shorty</title>
+    <meta name="theme-color" content="#242526">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="Shorty">
+    <link rel="manifest" href="/manifest.json?v=5">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=5">
+    <link rel="icon" type="image/png" sizes="256x256" href="/favicon.png?v=5">
+    <link rel="apple-touch-icon" sizes="152x152" href="/apple-touch-icon-152x152.png">
+    <link rel="apple-touch-icon" sizes="167x167" href="/apple-touch-icon-167x167.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon-180x180.png">
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+    <link rel="apple-touch-icon-precomposed" sizes="180x180" href="/apple-touch-icon-precomposed.png">
+    <link rel="stylesheet" href="style.css?v=23">
+</head>
+<body>
+<main class="dashboard">
+    <header class="dashboard-header">
+        <div>
+            <p class="eyebrow">Live BTC/EUR dashboard</p>
+            <h1>Bitcoin short trade</h1>
+        </div>
+        <p id="timer"></p>
+    </header>
+
+    <section class="metric-grid" aria-label="Bitcoin short trade metrics">
+        <div class="box">
+            <p>How much bitcoin <b>total</b> if I sell now?</p>
+            <h2 id="total"></h2>
+        </div>
+        <div class="box">
+            <p>Current price:</p>
+            <h2 id="currentPrice"></h2>
+        </div>
+        <div class="box">
+            <p>How much bitcoin did I gain or lose?</p>
+            <h2 id="delta"></h2>
+        </div>
+        <div class="box">
+            <p>How much percent profit or loss?</p>
+            <h2 id="percent"></h2>
+        </div>
+    </section>
+
+    <section class="chart-disclosure" aria-label="BTC/EUR chart">
+        <details id="priceChartPanel" class="chart-panel">
+            <summary class="chart-tab">
+                <span class="chart-tab-title">BTC/EUR chart</span>
+                <a
+                    class="chart-tab-source"
+                    href="https://tradingview.github.io/lightweight-charts/docs"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="Open Lightweight Charts documentation"
+                >Lightweight Charts</a>
+                <span class="chart-tab-icon" aria-hidden="true"></span>
+            </summary>
+            <div class="chart-body">
+                <div
+                    id="btcEurChart"
+                    class="price-chart-frame"
+                    aria-label="BTC/EUR price chart"
+                >
+                    <div class="price-chart-toolbar" aria-label="Chart timeframe controls">
+                        <button class="chart-period-button" type="button" data-chart-period="daily">Daily</button>
+                        <button class="chart-period-button is-active" type="button" data-chart-period="weekly">Weekly</button>
+                        <span class="price-chart-meta">24M history</span>
+                        <span>Live BTC/EUR</span>
+                    </div>
+                    <div class="price-chart-heading">
+                        <p>
+                            <span class="coin-dot">₿</span>
+                            <span>Bitcoin / Euro · <span id="chartTimeframeLabel">1W</span> · Coinbase</span>
+                        </p>
+                        <p id="chartOhlc" class="chart-ohlc"></p>
+                    </div>
+                    <div id="lightweightChart" class="lightweight-chart"></div>
+                    <p id="chartStatus" class="chart-placeholder">Chart loading...</p>
+                </div>
+            </div>
+        </details>
+    </section>
+
+    <section class="holdings-panel" aria-label="Short entry settings">
+        <div>
+            <p class="holdings-label">Short entry</p>
+        </div>
+        <label class="holdings-input-wrap" for="shortEntryPrice">
+            <span>€</span>
+            <input
+                id="shortEntryPrice"
+                type="number"
+                inputmode="numeric"
+                min="1"
+                step="1"
+                value="92000"
+                required
+                aria-label="Short entry price"
+            >
+        </label>
+    </section>
+
+    <section class="holdings-panel" aria-label="EUR holdings settings">
+        <div>
+            <p class="holdings-label">Current EUR holdings</p>
+        </div>
+        <label class="holdings-input-wrap" for="currentEurHoldings">
+            <span>€</span>
+            <input
+                id="currentEurHoldings"
+                type="number"
+                inputmode="numeric"
+                min="1"
+                step="1"
+                value="342000"
+                required
+                aria-label="Current EUR holdings"
+            >
+        </label>
+    </section>
+</main>
+
+<script src="btc.js?v=23"></script>
+<script>
+const refreshIntervalMs = 10000;
+const timerElement = document.getElementById('timer');
+let nextUpdateAt = Date.now();
+let refreshTimeoutId;
+
+function updateTimer() {
+    const msLeft = Math.max(0, nextUpdateAt - Date.now());
+    const secondsLeft = Math.ceil(msLeft / 1000);
+    timerElement.textContent = secondsLeft > 0
+        ? `Next update in ${secondsLeft} second${secondsLeft === 1 ? '' : 's'}...`
+        : 'Updating...';
+}
+
+async function refreshTradeInfo() {
+    window.clearTimeout(refreshTimeoutId);
+    nextUpdateAt = Date.now();
+    updateTimer();
+    await updateTradeInfo();
+    nextUpdateAt = Date.now() + refreshIntervalMs;
+    updateTimer();
+    refreshTimeoutId = window.setTimeout(refreshTradeInfo, refreshIntervalMs);
+}
+
+setInterval(updateTimer, 1000);
+setupPriceChart();
+setupShortEntryInput(refreshTradeInfo);
+setupHoldingsInput(refreshTradeInfo);
+refreshTradeInfo();
+</script>
+</body>
+</html>

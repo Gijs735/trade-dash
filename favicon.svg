@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <rect width="32" height="32" fill="#242526"/>
+
+  <circle cx="16" cy="16" r="12.2" fill="#f2c46d"/>
+  <circle cx="16" cy="16" r="9.3" fill="#ffd989"/>
+
+  <g fill="#242526">
+    <rect x="13.7" y="8.25" width="0.75" height="3.95" rx="0.38"/>
+    <rect x="17.3" y="8.25" width="0.75" height="3.95" rx="0.38"/>
+    <rect x="13.7" y="19.8" width="0.75" height="3.95" rx="0.38"/>
+    <rect x="17.3" y="19.8" width="0.75" height="3.95" rx="0.38"/>
+    <text
+      x="16"
+      y="20.55"
+      text-anchor="middle"
+      font-family="Avenir Next, Helvetica Neue, Arial, sans-serif"
+      font-size="14.9"
+      font-weight="700"
+    >B</text>
+  </g>
+</svg>
