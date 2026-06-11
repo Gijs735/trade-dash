@@ -1,0 +1,63 @@
+name: Deploy website to Azure Storage
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: azure-storage-deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    env:
+      # Uses Azure Static Website hosting's default container unless overridden
+      # by a repository variable named AZURE_STORAGE_CONTAINER.
+      AZURE_STORAGE_CONTAINER: ${{ vars.AZURE_STORAGE_CONTAINER || '$web' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare site files
+        run: |
+          mkdir -p _site
+          rsync -av --delete \
+            --exclude '.git/' \
+            --exclude '.github/' \
+            --exclude '_site/' \
+            --exclude 'LICENSE' \
+            --exclude 'README.md' \
+            ./ _site/
+
+      - name: Deploy to Azure Storage
+        uses: azure/cli@v2
+        env:
+          AZURE_CORE_OUTPUT: none
+          AZURE_STORAGE_ACCOUNT: ${{ secrets.AZURE_STORAGE_ACCOUNT }}
+          AZURE_STORAGE_SAS_TOKEN: ${{ secrets.AZURE_STORAGE_SAS_TOKEN }}
+        with:
+          azcliversion: latest
+          inlineScript: |
+            set -euo pipefail
+
+            : "${AZURE_STORAGE_ACCOUNT:?Set the AZURE_STORAGE_ACCOUNT repository secret.}"
+            : "${AZURE_STORAGE_SAS_TOKEN:?Set the AZURE_STORAGE_SAS_TOKEN repository secret.}"
+            : "${AZURE_STORAGE_CONTAINER:?Set AZURE_STORAGE_CONTAINER or leave it unset to use the default static website container.}"
+
+            sas_token="${AZURE_STORAGE_SAS_TOKEN#\?}"
+
+            az storage blob sync \
+              --account-name "$AZURE_STORAGE_ACCOUNT" \
+              --sas-token "$sas_token" \
+              --container "$AZURE_STORAGE_CONTAINER" \
+              --source "$GITHUB_WORKSPACE/_site" \
+              --delete-destination true \
+              --only-show-errors

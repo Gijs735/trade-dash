@@ -6,6 +6,8 @@ const coinbaseDailyCandleLimit = 290;
 const dayInSeconds = 86400;
 const candleCacheTtlMs = 3 * 60 * 60 * 1000;
 const candleCacheKey = `shorty:BTC-EUR:daily-candles:${chartHistoryMonths}m:v1`;
+const chartUpColor = '#4aa38c';
+const chartDownColor = '#ef5350';
 let sellPrice = 92000; // sell price in EUR
 let currentEurHoldings = 342000; // current EUR holdings
 let holdingsInputDebounceId;
@@ -498,13 +500,13 @@ function initializePriceChart(dailyCandles, weeklyCandles) {
     });
 
     const candlestickSeries = addChartSeries(chart, 'candlestick', {
-        upColor: '#4aa38c',
-        downColor: '#ef5350',
-        borderUpColor: '#4aa38c',
-        borderDownColor: '#ef5350',
-        wickUpColor: '#4aa38c',
-        wickDownColor: '#ef5350',
-        priceLineColor: '#ef5350',
+        upColor: chartUpColor,
+        downColor: chartDownColor,
+        borderUpColor: chartUpColor,
+        borderDownColor: chartDownColor,
+        wickUpColor: chartUpColor,
+        wickDownColor: chartDownColor,
+        priceLineColor: chartUpColor,
         lastValueVisible: true
     });
 
@@ -572,6 +574,7 @@ function renderActiveChartData({ resetRange = false } = {}) {
 
     priceChartState.candlestickSeries.setData(candles.map(toCandlestickData));
     priceChartState.volumeSeries.setData(candles.map(toVolumeData));
+    updateCurrentPriceLineColor();
     updateEntryPriceLine();
     if (resetRange) {
         setVisibleChartRange();
@@ -625,6 +628,23 @@ function toVolumeData(candle) {
     };
 }
 
+function updateCurrentPriceLineColor() {
+    const { candlestickSeries, activeCandles } = priceChartState;
+    if (!candlestickSeries || activeCandles.length === 0) {
+        return;
+    }
+
+    candlestickSeries.applyOptions({
+        priceLineColor: getCurrentPriceMoveColor(activeCandles)
+    });
+}
+
+function getCurrentPriceMoveColor(candles) {
+    const latest = candles[candles.length - 1];
+    const previous = candles[candles.length - 2] ?? latest;
+    return latest.close >= previous.close ? chartUpColor : chartDownColor;
+}
+
 function updateEntryPriceLine() {
     const { candlestickSeries } = priceChartState;
     if (!candlestickSeries) {
@@ -660,6 +680,7 @@ function updateLiveChartPrice(price) {
     priceChartState.activeCandles = activeCandles;
     candlestickSeries.update(toCandlestickData(latestCandle));
     volumeSeries.update(toVolumeData(latestCandle));
+    updateCurrentPriceLineColor();
     updateChartOhlc();
 }
 
@@ -713,7 +734,7 @@ function updateChartOhlc() {
     const previous = activeCandles[activeCandles.length - 2] ?? latest;
     const change = latest.close - previous.close;
     const percentChange = previous.close ? (change / previous.close) * 100 : 0;
-    const color = change >= 0 ? '#4aa38c' : '#ef5350';
+    const color = change >= 0 ? chartUpColor : chartDownColor;
     const sign = change >= 0 ? '+' : '';
 
     ohlcElement.style.color = color;
