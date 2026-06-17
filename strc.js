@@ -121,7 +121,9 @@ function renderStrcPosition(position) {
     currentPriceElement.textContent = formatUsd(position.currentPriceUsd);
     profitLossElement.textContent = formatSignedEur(position.profitLossEur);
     profitLossPercentElement.textContent = `${isProfit ? '+' : ''}${position.profitLossPercent.toFixed(2)}%`;
-    fxRateElement.textContent = `EUR/USD ${position.currentEurUsdRate.toFixed(4)}`;
+    fxRateElement.textContent = `${position.currentEurUsdRate.toFixed(4)} EUR/USD`;
+    fxRateElement.classList.toggle('is-favorable', position.currentEurUsdRate <= strcEntryEurUsdRate);
+    fxRateElement.classList.toggle('is-unfavorable', position.currentEurUsdRate > strcEntryEurUsdRate);
     profitLossElement.classList.toggle('is-profit', isProfit);
     profitLossElement.classList.toggle('is-loss', !isProfit);
 }
@@ -143,7 +145,8 @@ function renderStrcPositionError() {
         profitLossPercentElement.textContent = '';
     }
     if (fxRateElement) {
-        fxRateElement.textContent = 'FX unavailable';
+        fxRateElement.textContent = 'unavailable';
+        fxRateElement.classList.remove('is-favorable', 'is-unfavorable');
     }
 }
 
