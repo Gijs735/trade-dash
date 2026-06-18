@@ -4,10 +4,9 @@ import os
 import time
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
-from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
 
 import azure.functions as func
+import requests
 from azure.identity import DefaultAzureCredential
 from azure.storage.blob import BlobServiceClient, ContentSettings
 
@@ -88,32 +87,35 @@ def build_dividend_payload() -> dict:
 
 def fetch_nasdaq_dividend_rows() -> list[dict]:
     last_error: Exception | None = None
+    headers = {
+        "Accept": "application/json, text/plain, */*",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Cache-Control": "no-cache",
+        "Origin": "https://www.nasdaq.com",
+        "Pragma": "no-cache",
+        "Referer": "https://www.nasdaq.com/market-activity/stocks/strc/dividend-history",
+        "User-Agent": (
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/126.0.0.0 Safari/537.36"
+        ),
+    }
 
     for attempt in range(1, NASDAQ_MAX_ATTEMPTS + 1):
-        request = Request(
-            NASDAQ_DIVIDEND_URL,
-            headers={
-                "Accept": "application/json, text/plain, */*",
-                "Accept-Encoding": "identity",
-                "Cache-Control": "no-cache",
-                "Pragma": "no-cache",
-                "Referer": "https://www.nasdaq.com/market-activity/stocks/strc/dividend-history",
-                "User-Agent": (
-                    "Mozilla/5.0 (compatible; trade-dash dividend fetcher; "
-                    "+https://btc.finestbit.com)"
-                ),
-            },
-        )
-
         try:
-            with urlopen(request, timeout=NASDAQ_TIMEOUT_SECONDS) as response:
-                body = response.read().decode("utf-8")
+            response = requests.get(
+                NASDAQ_DIVIDEND_URL,
+                headers=headers,
+                timeout=NASDAQ_TIMEOUT_SECONDS,
+            )
+            if 400 <= response.status_code < 500:
+                raise RuntimeError(
+                    f"Nasdaq dividend request failed with HTTP {response.status_code}"
+                )
+            response.raise_for_status()
+            data = response.json()
             break
-        except HTTPError as err:
-            if 400 <= err.code < 500:
-                raise RuntimeError(f"Nasdaq dividend request failed with HTTP {err.code}") from err
-            last_error = err
-        except (TimeoutError, URLError, OSError) as err:
+        except (requests.RequestException, ValueError, RuntimeError) as err:
             last_error = err
 
         logging.warning(
@@ -130,7 +132,6 @@ def fetch_nasdaq_dividend_rows() -> list[dict]:
             f"{NASDAQ_MAX_ATTEMPTS} attempts; last error: {last_error}"
         ) from last_error
 
-    data = json.loads(body)
     rows = data.get("data", {}).get("dividends", {}).get("rows")
     if not isinstance(rows, list):
         raise RuntimeError("Nasdaq dividend response did not include dividend rows")
