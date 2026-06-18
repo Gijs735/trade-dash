@@ -25,6 +25,32 @@ def fetch_strc_dividends(timer: func.TimerRequest) -> None:
     if timer.past_due:
         logging.warning("STRC dividend fetch timer is past due.")
 
+    refresh_strc_dividend_blob()
+
+
+@app.route(route="refresh-strc-dividends", methods=["GET", "POST"], auth_level=func.AuthLevel.FUNCTION)
+def refresh_strc_dividends(req: func.HttpRequest) -> func.HttpResponse:
+    try:
+        result = refresh_strc_dividend_blob()
+        return func.HttpResponse(
+            json.dumps(result, indent=2, sort_keys=True),
+            status_code=200,
+            mimetype="application/json",
+        )
+    except Exception as err:
+        logging.exception("Manual STRC dividend refresh failed.")
+        return func.HttpResponse(
+            json.dumps({
+                "ok": False,
+                "error": str(err),
+                "blob": f"{STATIC_SITE_CONTAINER}/{OUTPUT_BLOB_NAME}",
+            }, indent=2, sort_keys=True),
+            status_code=500,
+            mimetype="application/json",
+        )
+
+
+def refresh_strc_dividend_blob() -> dict:
     payload = build_dividend_payload()
     upload_payload(payload)
     logging.info(
@@ -33,6 +59,14 @@ def fetch_strc_dividends(timer: func.TimerRequest) -> None:
         STATIC_SITE_CONTAINER,
         OUTPUT_BLOB_NAME,
     )
+
+    return {
+        "ok": True,
+        "symbol": SYMBOL,
+        "rows": len(payload["dividends"]),
+        "fetchedAt": payload["fetchedAt"],
+        "blob": f"{STATIC_SITE_CONTAINER}/{OUTPUT_BLOB_NAME}",
+    }
 
 
 def build_dividend_payload() -> dict:
