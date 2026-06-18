@@ -1,5 +1,5 @@
-const strcEntryPriceUsd = 91;
-const strcOwnedShares = 4353;
+const strcEntryPriceUsd = 90.99;
+const strcOwnedShares = 4360;
 const strcEntryEurUsdRate = 1.1594;
 
 async function updateStrcPositionWidget() {
