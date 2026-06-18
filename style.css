@@ -451,6 +451,27 @@ h1 {
     line-height: 1;
 }
 
+.strc-profit-meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    min-width: 0;
+}
+
+.strc-profit-meta .strc-metric-note {
+    min-width: 0;
+}
+
+.strc-profit-meta .strc-metric-note:last-child {
+    flex: 0 0 auto;
+    text-align: right;
+}
+
+.strc-metric-note.has-dividends {
+    color: #22c55e;
+}
+
 .holdings-panel {
     display: flex;
     align-items: center;

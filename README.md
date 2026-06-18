@@ -18,3 +18,12 @@ Configure these repository secrets:
 By default the workflow deploys to the `$web` container used by Azure Static
 Website hosting. To deploy to a different container, add a repository variable
 named `AZURE_STORAGE_CONTAINER`.
+
+## STRC dividend fetch
+
+The `.github/workflows/main_nasdaq-fetch.yml` workflow deploys the Python Azure
+Function in `nasdaq-fetch/`. The function runs daily at `06:00 UTC`, fetches
+STRC dividend rows from Nasdaq, and writes `strc-dividends.json`.
+
+Grant the Function App managed identity write access to that storage account
+or set a Function App setting named `STRC_DIVIDEND_STORAGE_CONNECTION_STRING`.

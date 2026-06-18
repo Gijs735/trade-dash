@@ -1,14 +1,21 @@
 const strcEntryPriceUsd = 90.99;
 const strcOwnedShares = 4360;
 const strcEntryEurUsdRate = 1.1594;
+const strcPurchaseDate = '2026-06-17';
+const strcDividendJsonUrl = '/strc-dividends.json';
+const strcDividendCacheTtlMs = 5 * 60 * 1000;
+let strcDividendScheduleCache;
+let strcDividendScheduleFetchedAt = 0;
+let strcDividendSchedulePromise;
 
 async function updateStrcPositionWidget() {
     try {
-        const [strcPriceUsd, currentEurUsdRate] = await Promise.all([
+        const [strcPriceUsd, currentEurUsdRate, dividendSchedule] = await Promise.all([
             getTradingViewStrcPriceUsd(),
-            getCurrentEurUsdRate()
+            getCurrentEurUsdRate(),
+            getStrcDividendSchedule()
         ]);
-        const position = evaluateStrcPosition(strcPriceUsd, currentEurUsdRate);
+        const position = evaluateStrcPosition(strcPriceUsd, currentEurUsdRate, dividendSchedule);
         renderStrcPosition(position);
         return position;
     } catch (err) {
@@ -93,27 +100,115 @@ async function getKrakenEurUsdRate() {
     return rate;
 }
 
-function evaluateStrcPosition(currentPriceUsd, currentEurUsdRate) {
+async function getStrcDividendSchedule() {
+    if (
+        strcDividendScheduleCache
+        && Date.now() - strcDividendScheduleFetchedAt < strcDividendCacheTtlMs
+    ) {
+        return strcDividendScheduleCache;
+    }
+
+    if (!strcDividendSchedulePromise) {
+        strcDividendSchedulePromise = fetchStrcDividendSchedule()
+            .finally(() => {
+                strcDividendSchedulePromise = null;
+            });
+    }
+
+    return strcDividendSchedulePromise;
+}
+
+async function fetchStrcDividendSchedule() {
+    const response = await fetch(strcDividendJsonUrl, { cache: 'no-cache' });
+    if (!response.ok) {
+        throw new Error(`STRC dividends request failed. Status Code: ${response.status}`);
+    }
+
+    const json = await response.json();
+    if (json?.symbol !== 'STRC' || !Array.isArray(json?.dividends)) {
+        throw new Error('STRC dividends response is invalid');
+    }
+
+    const dividendSchedule = json.dividends
+        .map(normalizeStrcDividend)
+        .filter(Boolean);
+    strcDividendScheduleCache = dividendSchedule;
+    strcDividendScheduleFetchedAt = Date.now();
+    return dividendSchedule;
+}
+
+function normalizeStrcDividend(dividend) {
+    const amountUsd = Number(dividend?.amountUsd);
+    if (
+        !isIsoDate(dividend?.exDividendDate)
+        || !isIsoDate(dividend?.paymentDate)
+        || !Number.isFinite(amountUsd)
+        || amountUsd <= 0
+    ) {
+        return null;
+    }
+
+    return {
+        exDividendDate: dividend.exDividendDate,
+        paymentDate: dividend.paymentDate,
+        amountUsd
+    };
+}
+
+function isIsoDate(value) {
+    return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+
+function evaluateStrcPosition(currentPriceUsd, currentEurUsdRate, dividendSchedule) {
     const costBasisEur = (strcEntryPriceUsd * strcOwnedShares) / strcEntryEurUsdRate;
     const currentValueEur = (currentPriceUsd * strcOwnedShares) / currentEurUsdRate;
-    const profitLossEur = currentValueEur - costBasisEur;
-    const profitLossPercent = costBasisEur === 0 ? 0 : (profitLossEur / costBasisEur) * 100;
+    const dividendsReceived = getStrcDividendsReceived(currentEurUsdRate, dividendSchedule);
+    const adjustedCostBasisEur = costBasisEur - dividendsReceived.totalEur;
+    const profitLossEur = currentValueEur - adjustedCostBasisEur;
+    const profitLossPercent = adjustedCostBasisEur === 0 ? 0 : (profitLossEur / adjustedCostBasisEur) * 100;
 
     return {
         currentPriceUsd,
         currentEurUsdRate,
         profitLossEur,
-        profitLossPercent
+        profitLossPercent,
+        dividendsReceived
     };
+}
+
+function getStrcDividendsReceived(currentEurUsdRate, dividendSchedule) {
+    const today = getLocalDateString();
+    const receivedDividends = dividendSchedule.filter((dividend) => (
+        dividend.exDividendDate >= strcPurchaseDate
+        && dividend.paymentDate <= today
+    ));
+    const totalUsd = receivedDividends.reduce((total, dividend) => (
+        total + (dividend.amountUsd * strcOwnedShares)
+    ), 0);
+
+    return {
+        count: receivedDividends.length,
+        totalUsd,
+        totalEur: totalUsd / currentEurUsdRate
+    };
+}
+
+function getLocalDateString() {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
 }
 
 function renderStrcPosition(position) {
     const currentPriceElement = document.getElementById('strcCurrentPrice');
     const profitLossElement = document.getElementById('strcProfitLoss');
     const profitLossPercentElement = document.getElementById('strcProfitLossPercent');
+    const dividendsReceivedElement = document.getElementById('strcDividendsReceived');
     const fxRateElement = document.getElementById('strcFxRate');
 
-    if (!currentPriceElement || !profitLossElement || !profitLossPercentElement || !fxRateElement) {
+    if (!currentPriceElement || !profitLossElement || !profitLossPercentElement || !dividendsReceivedElement || !fxRateElement) {
         return;
     }
 
@@ -121,6 +216,8 @@ function renderStrcPosition(position) {
     currentPriceElement.textContent = formatUsd(position.currentPriceUsd);
     profitLossElement.textContent = formatSignedEur(position.profitLossEur);
     profitLossPercentElement.textContent = `${isProfit ? '+' : ''}${position.profitLossPercent.toFixed(2)}%`;
+    dividendsReceivedElement.textContent = `(Div: ${formatEur(position.dividendsReceived.totalEur)})`;
+    dividendsReceivedElement.classList.toggle('has-dividends', position.dividendsReceived.totalEur > 0);
     fxRateElement.textContent = `${position.currentEurUsdRate.toFixed(4)} EUR/USD`;
     fxRateElement.classList.toggle('is-favorable', position.currentEurUsdRate <= strcEntryEurUsdRate);
     fxRateElement.classList.toggle('is-unfavorable', position.currentEurUsdRate > strcEntryEurUsdRate);
@@ -132,6 +229,7 @@ function renderStrcPositionError() {
     const currentPriceElement = document.getElementById('strcCurrentPrice');
     const profitLossElement = document.getElementById('strcProfitLoss');
     const profitLossPercentElement = document.getElementById('strcProfitLossPercent');
+    const dividendsReceivedElement = document.getElementById('strcDividendsReceived');
     const fxRateElement = document.getElementById('strcFxRate');
 
     if (currentPriceElement) {
@@ -143,6 +241,10 @@ function renderStrcPositionError() {
     }
     if (profitLossPercentElement) {
         profitLossPercentElement.textContent = '';
+    }
+    if (dividendsReceivedElement) {
+        dividendsReceivedElement.textContent = '';
+        dividendsReceivedElement.classList.remove('has-dividends');
     }
     if (fxRateElement) {
         fxRateElement.textContent = 'unavailable';
@@ -159,7 +261,11 @@ function formatUsd(amount) {
 
 function formatSignedEur(amount) {
     const sign = amount >= 0 ? '+' : '-';
-    return `${sign}€ ${Math.abs(amount).toLocaleString('en-US', {
+    return `${sign}${formatEur(Math.abs(amount))}`;
+}
+
+function formatEur(amount) {
+    return `€ ${Number(amount).toLocaleString('en-US', {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2
     })}`;

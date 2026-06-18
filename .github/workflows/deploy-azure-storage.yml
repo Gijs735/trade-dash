@@ -64,4 +64,5 @@ jobs:
           azcopy sync "$GITHUB_WORKSPACE/_site" "$destination_url" \
             --recursive=true \
             --delete-destination=true \
+            --exclude-path=strc-dividends.json \
             --log-level=ERROR
