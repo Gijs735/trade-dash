@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import time
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 from urllib.error import HTTPError, URLError
@@ -18,6 +19,8 @@ STORAGE_ACCOUNT_NAME = os.getenv("STRC_DIVIDEND_STORAGE_ACCOUNT", "msmstorai")
 STATIC_SITE_CONTAINER = os.getenv("STRC_DIVIDEND_STORAGE_CONTAINER", "$web")
 OUTPUT_BLOB_NAME = "strc-dividends.json"
 SYMBOL = "STRC"
+NASDAQ_TIMEOUT_SECONDS = int(os.getenv("STRC_NASDAQ_TIMEOUT_SECONDS", "45"))
+NASDAQ_MAX_ATTEMPTS = int(os.getenv("STRC_NASDAQ_MAX_ATTEMPTS", "3"))
 
 
 @app.timer_trigger(schedule="0 0 6 * * *", arg_name="timer", run_on_startup=False, use_monitor=True)
@@ -84,24 +87,48 @@ def build_dividend_payload() -> dict:
 
 
 def fetch_nasdaq_dividend_rows() -> list[dict]:
-    request = Request(
-        NASDAQ_DIVIDEND_URL,
-        headers={
-            "Accept": "application/json, text/plain, */*",
-            "User-Agent": (
-                "Mozilla/5.0 (compatible; trade-dash dividend fetcher; "
-                "+https://btc.finestbit.com)"
-            ),
-        },
-    )
+    last_error: Exception | None = None
 
-    try:
-        with urlopen(request, timeout=20) as response:
-            body = response.read().decode("utf-8")
-    except HTTPError as err:
-        raise RuntimeError(f"Nasdaq dividend request failed with HTTP {err.code}") from err
-    except URLError as err:
-        raise RuntimeError(f"Nasdaq dividend request failed: {err.reason}") from err
+    for attempt in range(1, NASDAQ_MAX_ATTEMPTS + 1):
+        request = Request(
+            NASDAQ_DIVIDEND_URL,
+            headers={
+                "Accept": "application/json, text/plain, */*",
+                "Accept-Encoding": "identity",
+                "Cache-Control": "no-cache",
+                "Pragma": "no-cache",
+                "Referer": "https://www.nasdaq.com/market-activity/stocks/strc/dividend-history",
+                "User-Agent": (
+                    "Mozilla/5.0 (compatible; trade-dash dividend fetcher; "
+                    "+https://btc.finestbit.com)"
+                ),
+            },
+        )
+
+        try:
+            with urlopen(request, timeout=NASDAQ_TIMEOUT_SECONDS) as response:
+                body = response.read().decode("utf-8")
+            break
+        except HTTPError as err:
+            if 400 <= err.code < 500:
+                raise RuntimeError(f"Nasdaq dividend request failed with HTTP {err.code}") from err
+            last_error = err
+        except (TimeoutError, URLError, OSError) as err:
+            last_error = err
+
+        logging.warning(
+            "Nasdaq dividend request attempt %s/%s failed: %s",
+            attempt,
+            NASDAQ_MAX_ATTEMPTS,
+            last_error,
+        )
+        if attempt < NASDAQ_MAX_ATTEMPTS:
+            time.sleep(attempt * 2)
+    else:
+        raise RuntimeError(
+            "Nasdaq dividend request failed after "
+            f"{NASDAQ_MAX_ATTEMPTS} attempts; last error: {last_error}"
+        ) from last_error
 
     data = json.loads(body)
     rows = data.get("data", {}).get("dividends", {}).get("rows")
