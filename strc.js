@@ -4,6 +4,7 @@ const strcEntryEurUsdRate = 1.1594;
 const strcPurchaseDate = '2026-06-17';
 const strcDividendJsonUrl = '/strc-dividends.json';
 const strcDividendCacheTtlMs = 5 * 60 * 1000;
+const strcDividendReceivedHour = 6;
 let strcDividendScheduleCache;
 let strcDividendScheduleFetchedAt = 0;
 let strcDividendSchedulePromise;
@@ -177,10 +178,10 @@ function evaluateStrcPosition(currentPriceUsd, currentEurUsdRate, dividendSchedu
 }
 
 function getStrcDividendsReceived(currentEurUsdRate, dividendSchedule) {
-    const today = getLocalDateString();
+    const now = new Date();
     const receivedDividends = dividendSchedule.filter((dividend) => (
         dividend.exDividendDate >= strcPurchaseDate
-        && dividend.paymentDate <= today
+        && now >= getLocalDividendCutoff(dividend.exDividendDate, strcDividendReceivedHour)
     ));
     const totalUsd = receivedDividends.reduce((total, dividend) => (
         total + (dividend.amountUsd * strcOwnedShares)
@@ -193,12 +194,9 @@ function getStrcDividendsReceived(currentEurUsdRate, dividendSchedule) {
     };
 }
 
-function getLocalDateString() {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const day = String(now.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
+function getLocalDividendCutoff(isoDate, hour) {
+    const [year, month, day] = isoDate.split('-').map(Number);
+    return new Date(year, month - 1, day, hour, 0, 0, 0);
 }
 
 function renderStrcPosition(position) {
