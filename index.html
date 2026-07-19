@@ -16,10 +16,39 @@
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon-180x180.png">
     <link rel="apple-touch-icon" href="/apple-touch-icon.png">
     <link rel="apple-touch-icon-precomposed" sizes="180x180" href="/apple-touch-icon-precomposed.png">
-    <link rel="stylesheet" href="style.css?v=26">
+    <link rel="stylesheet" href="style.css?v=39">
 </head>
 <body>
+<nav class="app-tabbar" aria-label="Dashboard tabs">
+    <div class="app-tabbar-inner" role="tablist">
+        <button
+            id="shortyTabButton"
+            class="app-tab is-active"
+            type="button"
+            role="tab"
+            aria-selected="true"
+            aria-controls="shortyTabPanel"
+            data-dashboard-tab="shorty"
+        >Shorty</button>
+        <button
+            id="bridgeFireTabButton"
+            class="app-tab"
+            type="button"
+            role="tab"
+            aria-selected="false"
+            aria-controls="bridgeFireTabPanel"
+            data-dashboard-tab="bridge-fire"
+        >Bridge-FIRE Dash</button>
+    </div>
+</nav>
 <main class="dashboard">
+    <section
+        id="shortyTabPanel"
+        class="dashboard-tab-panel"
+        role="tabpanel"
+        aria-labelledby="shortyTabButton"
+        data-dashboard-panel="shorty"
+    >
     <header class="dashboard-header">
         <div>
             <p class="eyebrow">Live BTC/EUR dashboard</p>
@@ -153,17 +182,295 @@
             >
         </label>
     </section>
+    </section>
+    <section
+        id="bridgeFireTabPanel"
+        class="dashboard-tab-panel"
+        role="tabpanel"
+        aria-labelledby="bridgeFireTabButton"
+        data-dashboard-panel="bridge-fire"
+        hidden
+    >
+        <header class="dashboard-header bridge-fire-header">
+            <div>
+                <p class="eyebrow">Personal bridge FIRE simulator</p>
+                <h1>Bridge-FIRE Dash</h1>
+            </div>
+            <button id="bridgeFireResetButton" class="bridge-fire-reset" type="button">Reset defaults</button>
+        </header>
+
+        <section id="bridgeFireApp" class="bridge-fire" aria-label="Bridge FIRE calculator">
+            <section class="bridge-kpi-grid" aria-label="Bridge FIRE headline results">
+                <div class="bridge-kpi">
+                    <p>Earliest safe FIRE</p>
+                    <h2 id="bridgeFireDate">Calculating...</h2>
+                </div>
+                <div class="bridge-kpi">
+                    <p>Selected FIRE age</p>
+                    <h2 id="bridgeFireAge">--</h2>
+                </div>
+                <div class="bridge-kpi">
+                    <p>Required liquid at FIRE</p>
+                    <h2 id="bridgeRequiredLiquid">--</h2>
+                    <span id="bridgeRequiredLiquidNote" class="bridge-kpi-note">Future euros</span>
+                </div>
+                <div class="bridge-kpi">
+                    <p>Current net worth</p>
+                    <h2 id="bridgeCurrentNetWorth">--</h2>
+                </div>
+                <div class="bridge-kpi">
+                    <p>Current apartment equity</p>
+                    <h2 id="bridgeApartmentEquity">--</h2>
+                </div>
+                <div class="bridge-kpi">
+                    <p>Plan status</p>
+                    <h2 id="bridgePlanStatus">--</h2>
+                </div>
+            </section>
+
+            <section class="bridge-panel bridge-chart-panel" aria-label="Bridge FIRE projection chart">
+                <div class="bridge-panel-header">
+                    <div>
+                        <p class="holdings-label">Projection</p>
+                        <p id="bridgeProjectionSummary" class="bridge-muted">Monthly real-money simulation</p>
+                    </div>
+                    <div class="bridge-chart-legend" aria-label="Chart legend">
+                        <span><i class="legend-liquid"></i>Liquid</span>
+                        <span><i class="legend-cash"></i>Cash</span>
+                        <span><i class="legend-apartment"></i>Apartment equity</span>
+                    </div>
+                </div>
+                <div id="bridgeFireChart" class="bridge-chart" aria-label="Bridge FIRE projection"></div>
+            </section>
+
+            <section class="bridge-controls-grid" aria-label="Bridge FIRE assumptions">
+                <fieldset class="bridge-panel bridge-control-panel bridge-control-primary" aria-label="Portfolio">
+                    <div class="bridge-control-title" aria-hidden="true">Portfolio</div>
+                    <div class="bridge-segmented bridge-mode-toggle" role="radiogroup" aria-label="FIRE date mode">
+                        <label>
+                            <input type="radio" name="fireMode" value="earliest" data-fire-setting="fireMode">
+                            <span>Auto earliest</span>
+                        </label>
+                        <label>
+                            <input type="radio" name="fireMode" value="manual" data-fire-setting="fireMode">
+                            <span>Manual age</span>
+                        </label>
+                    </div>
+                    <label class="bridge-field bridge-range-field">
+                        <span class="bridge-range-heading">
+                            Manual FIRE age
+                            <strong id="bridgeManualFireAgeValue">40.0</strong>
+                        </span>
+                        <input type="range" min="30" max="105" step="0.1" data-fire-setting="manualFireAge">
+                    </label>
+                    <label class="bridge-field">
+                        <span>Liquid portfolio</span>
+                        <input type="number" min="0" step="1000" data-fire-setting="liquidPortfolio">
+                    </label>
+                    <label class="bridge-field">
+                        <span>Pre-FIRE real return</span>
+                        <input type="number" step="0.1" data-fire-setting="preFireReturnPercent">
+                    </label>
+                    <label class="bridge-field">
+                        <span>WEBN real return</span>
+                        <input type="number" step="0.1" data-fire-setting="webnReturnPercent">
+                    </label>
+                    <label class="bridge-field">
+                        <span>Cash real return</span>
+                        <input type="number" step="0.1" data-fire-setting="cashReturnPercent">
+                    </label>
+                    <label class="bridge-field">
+                        <span>Cash reserve years</span>
+                        <input type="number" min="0" step="0.25" data-fire-setting="cashReserveYears">
+                    </label>
+                    <label class="bridge-field">
+                        <span>Inflation assumption</span>
+                        <input type="number" step="0.1" data-fire-setting="inflationPercent">
+                    </label>
+                    <label class="bridge-field">
+                        <span>Life expectancy</span>
+                        <input type="number" min="60" max="120" step="1" data-fire-setting="lifeExpectancyAge">
+                    </label>
+                </fieldset>
+
+                <fieldset class="bridge-panel bridge-control-panel bridge-control-compact" aria-label="Spending">
+                    <div class="bridge-control-title" aria-hidden="true">Spending</div>
+                    <label class="bridge-field">
+                        <span>First-years spending</span>
+                        <input type="number" min="0" step="1000" data-fire-setting="earlyRetirementSpending">
+                    </label>
+                    <label class="bridge-field">
+                        <span>First-years duration</span>
+                        <input type="number" min="0" step="1" data-fire-setting="earlyRetirementYears">
+                    </label>
+                    <label class="bridge-field">
+                        <span>Long-term spending</span>
+                        <input type="number" min="0" step="1000" data-fire-setting="retirementSpending">
+                    </label>
+                    <label class="bridge-toggle">
+                        <input type="checkbox" data-fire-setting="guardrailEnabled">
+                        <span>Guardrail spending cut</span>
+                    </label>
+                    <label class="bridge-field">
+                        <span>Portfolio drop trigger</span>
+                        <input type="number" min="0" max="95" step="1" data-fire-setting="guardrailDropPercent">
+                    </label>
+                    <label class="bridge-field">
+                        <span>Annual spending cut</span>
+                        <input type="number" min="0" step="500" data-fire-setting="guardrailCutAmount">
+                    </label>
+                </fieldset>
+
+                <fieldset class="bridge-panel bridge-control-panel bridge-control-wide" aria-label="Apartment">
+                    <div class="bridge-control-title" aria-hidden="true">Apartment</div>
+                    <div class="bridge-segmented" role="radiogroup" aria-label="Apartment strategy">
+                        <label>
+                            <input type="radio" name="apartmentStrategy" value="rentForever" data-fire-setting="apartmentStrategy">
+                            <span>Rent out forever</span>
+                        </label>
+                        <label>
+                            <input type="radio" name="apartmentStrategy" value="sellAtFire" data-fire-setting="apartmentStrategy">
+                            <span>Sell at FIRE</span>
+                        </label>
+                        <label>
+                            <input type="radio" name="apartmentStrategy" value="sellAtPayoff" data-fire-setting="apartmentStrategy">
+                            <span>Sell 2048</span>
+                        </label>
+                        <label>
+                            <input type="radio" name="apartmentStrategy" value="sellAtDate" data-fire-setting="apartmentStrategy">
+                            <span>Sell at specified date</span>
+                        </label>
+                    </div>
+                    <label class="bridge-field">
+                        <span>Apartment value</span>
+                        <input type="number" min="0" step="1000" data-fire-setting="apartmentValue">
+                    </label>
+                    <label class="bridge-field">
+                        <span>Real appreciation</span>
+                        <input type="number" step="0.1" data-fire-setting="apartmentRealAppreciationPercent">
+                    </label>
+                    <label class="bridge-field">
+                        <span>Pre-payoff rent</span>
+                        <input type="number" min="0" step="25" data-fire-setting="prePayoffRent">
+                    </label>
+                    <label class="bridge-field">
+                        <span>Mortgage payment</span>
+                        <input type="number" min="0" step="1" data-fire-setting="mortgagePayment">
+                    </label>
+                    <label class="bridge-field">
+                        <span>Post-payoff rent</span>
+                        <input type="number" min="0" step="25" data-fire-setting="postPayoffRent">
+                    </label>
+                    <label class="bridge-field">
+                        <span>Sell month</span>
+                        <input type="month" data-fire-setting="apartmentSaleMonth">
+                    </label>
+                    <label class="bridge-field">
+                        <span>Sale costs</span>
+                        <input type="number" min="0" max="25" step="0.1" data-fire-setting="apartmentSaleCostPercent">
+                    </label>
+                    <label class="bridge-toggle">
+                        <input type="checkbox" data-fire-setting="includePreFireApartmentCashflow">
+                        <span>Invest pre-FIRE apartment cashflow</span>
+                    </label>
+                </fieldset>
+
+                <fieldset class="bridge-panel bridge-control-panel bridge-control-half" aria-label="Inheritance">
+                    <div class="bridge-control-title" aria-hidden="true">Inheritance</div>
+                    <p id="bridgeInheritanceSummary" class="bridge-control-note">Youngest parent reaches trigger age</p>
+                    <label class="bridge-field">
+                        <span>Dad birthdate</span>
+                        <input type="date" data-fire-setting="dadBirthdate">
+                    </label>
+                    <label class="bridge-field">
+                        <span>Mom birthdate</span>
+                        <input type="date" data-fire-setting="momBirthdate">
+                    </label>
+                    <label class="bridge-field">
+                        <span>Trigger age (youngest parent)</span>
+                        <input type="number" min="50" max="120" step="1" data-fire-setting="inheritanceTriggerAge">
+                    </label>
+                    <label class="bridge-field">
+                        <span>House value</span>
+                        <input type="number" min="0" step="10000" data-fire-setting="inheritanceHouseValue">
+                    </label>
+                </fieldset>
+            </section>
+
+            <section class="bridge-panel bridge-table-panel" aria-label="Bridge FIRE yearly breakdown">
+                <div class="bridge-panel-header">
+                    <div>
+                        <p class="holdings-label">Yearly breakdown</p>
+                        <p class="bridge-muted">Liquid portfolio, cash reserve, apartment equity and plan events, all in today's euros</p>
+                    </div>
+                </div>
+                <div class="bridge-table-wrap">
+                    <table class="bridge-table">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Age</th>
+                                <th>Liquid (today €)</th>
+                                <th>Cash (today €)</th>
+                                <th>Apartment equity (today €)</th>
+                                <th>Spending (today €)</th>
+                                <th>Event</th>
+                            </tr>
+                        </thead>
+                        <tbody id="bridgeYearlyRows"></tbody>
+                    </table>
+                </div>
+            </section>
+        </section>
+    </section>
 </main>
 
 <script src="btc.js?v=24"></script>
 <script src="strc.js?v=9"></script>
+<script src="bridge-fire.js?v=18"></script>
 <script>
 const refreshIntervalMs = 10000;
 const timerElement = document.getElementById('timer');
 let nextUpdateAt = Date.now();
 let refreshTimeoutId;
+let activeDashboardTab = 'shorty';
+
+function setupDashboardTabs() {
+    document.querySelectorAll('[data-dashboard-tab]').forEach((tabButton) => {
+        tabButton.addEventListener('click', () => {
+            setActiveDashboardTab(tabButton.dataset.dashboardTab);
+        });
+    });
+}
+
+function setActiveDashboardTab(tabId) {
+    if (!tabId || tabId === activeDashboardTab) {
+        return;
+    }
+
+    activeDashboardTab = tabId;
+    document.querySelectorAll('[data-dashboard-tab]').forEach((tabButton) => {
+        const isActive = tabButton.dataset.dashboardTab === tabId;
+        tabButton.classList.toggle('is-active', isActive);
+        tabButton.setAttribute('aria-selected', String(isActive));
+    });
+    document.querySelectorAll('[data-dashboard-panel]').forEach((panel) => {
+        panel.hidden = panel.dataset.dashboardPanel !== tabId;
+    });
+    document.title = tabId === 'bridge-fire' ? 'Bridge-FIRE Dash' : 'Shorty';
+
+    if (tabId === 'shorty') {
+        refreshTradeInfo();
+    } else {
+        window.clearTimeout(refreshTimeoutId);
+    }
+}
 
 function updateTimer() {
+    if (activeDashboardTab !== 'shorty') {
+        return;
+    }
+
     const msLeft = Math.max(0, nextUpdateAt - Date.now());
     const secondsLeft = Math.ceil(msLeft / 1000);
     timerElement.textContent = secondsLeft > 0
@@ -173,21 +480,31 @@ function updateTimer() {
 
 async function refreshTradeInfo() {
     window.clearTimeout(refreshTimeoutId);
+    if (activeDashboardTab !== 'shorty') {
+        return;
+    }
+
     nextUpdateAt = Date.now();
     updateTimer();
     await Promise.allSettled([
         updateTradeInfo(),
         updateStrcPositionWidget()
     ]);
+    if (activeDashboardTab !== 'shorty') {
+        return;
+    }
+
     nextUpdateAt = Date.now() + refreshIntervalMs;
     updateTimer();
     refreshTimeoutId = window.setTimeout(refreshTradeInfo, refreshIntervalMs);
 }
 
 setInterval(updateTimer, 1000);
+setupDashboardTabs();
 setupPriceChart();
 setupShortEntryInput(refreshTradeInfo);
 setupHoldingsInput(refreshTradeInfo);
+setupBridgeFireCalculator();
 refreshTradeInfo();
 </script>
 </body>
