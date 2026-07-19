@@ -1102,6 +1102,10 @@ h1 {
 }
 
 @media (max-width: 720px) {
+    .app-tabbar {
+        display: none;
+    }
+
     .app-tabbar-inner {
         width: min(100% - 24px, 520px);
         min-height: 52px;

@@ -16,7 +16,7 @@
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon-180x180.png">
     <link rel="apple-touch-icon" href="/apple-touch-icon.png">
     <link rel="apple-touch-icon-precomposed" sizes="180x180" href="/apple-touch-icon-precomposed.png">
-    <link rel="stylesheet" href="style.css?v=39">
+    <link rel="stylesheet" href="style.css?v=40">
 </head>
 <body>
 <nav class="app-tabbar" aria-label="Dashboard tabs">
@@ -434,6 +434,9 @@ const timerElement = document.getElementById('timer');
 let nextUpdateAt = Date.now();
 let refreshTimeoutId;
 let activeDashboardTab = 'shorty';
+const mobileTabMediaQuery = window.matchMedia
+    ? window.matchMedia('(max-width: 720px)')
+    : null;
 
 function setupDashboardTabs() {
     document.querySelectorAll('[data-dashboard-tab]').forEach((tabButton) => {
@@ -441,6 +444,19 @@ function setupDashboardTabs() {
             setActiveDashboardTab(tabButton.dataset.dashboardTab);
         });
     });
+
+    syncDashboardTabsForViewport();
+    if (mobileTabMediaQuery?.addEventListener) {
+        mobileTabMediaQuery.addEventListener('change', syncDashboardTabsForViewport);
+    } else if (mobileTabMediaQuery?.addListener) {
+        mobileTabMediaQuery.addListener(syncDashboardTabsForViewport);
+    }
+}
+
+function syncDashboardTabsForViewport() {
+    if (mobileTabMediaQuery?.matches) {
+        setActiveDashboardTab('shorty');
+    }
 }
 
 function setActiveDashboardTab(tabId) {
