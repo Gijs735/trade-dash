@@ -167,10 +167,12 @@ function evaluateStrcPosition(currentPriceUsd, currentEurUsdRate, dividendSchedu
     const adjustedCostBasisEur = costBasisEur - dividendsReceived.totalEur;
     const profitLossEur = currentValueEur - adjustedCostBasisEur;
     const profitLossPercent = adjustedCostBasisEur === 0 ? 0 : (profitLossEur / adjustedCostBasisEur) * 100;
+    const breakevenPriceUsd = (adjustedCostBasisEur * currentEurUsdRate) / strcOwnedShares;
 
     return {
         currentPriceUsd,
         currentEurUsdRate,
+        breakevenPriceUsd,
         profitLossEur,
         profitLossPercent,
         dividendsReceived
@@ -201,17 +203,19 @@ function getLocalDividendCutoff(isoDate, hour) {
 
 function renderStrcPosition(position) {
     const currentPriceElement = document.getElementById('strcCurrentPrice');
+    const breakevenPriceElement = document.getElementById('strcBreakevenPrice');
     const profitLossElement = document.getElementById('strcProfitLoss');
     const profitLossPercentElement = document.getElementById('strcProfitLossPercent');
     const dividendsReceivedElement = document.getElementById('strcDividendsReceived');
     const fxRateElement = document.getElementById('strcFxRate');
 
-    if (!currentPriceElement || !profitLossElement || !profitLossPercentElement || !dividendsReceivedElement || !fxRateElement) {
+    if (!currentPriceElement || !breakevenPriceElement || !profitLossElement || !profitLossPercentElement || !dividendsReceivedElement || !fxRateElement) {
         return;
     }
 
     const isProfit = position.profitLossEur >= 0;
     currentPriceElement.textContent = formatUsd(position.currentPriceUsd);
+    breakevenPriceElement.textContent = formatUsd(position.breakevenPriceUsd);
     profitLossElement.textContent = formatSignedEur(position.profitLossEur);
     profitLossPercentElement.textContent = `${isProfit ? '+' : ''}${position.profitLossPercent.toFixed(2)}%`;
     dividendsReceivedElement.textContent = `(Div: ${formatEur(position.dividendsReceived.totalEur)})`;
@@ -225,6 +229,7 @@ function renderStrcPosition(position) {
 
 function renderStrcPositionError() {
     const currentPriceElement = document.getElementById('strcCurrentPrice');
+    const breakevenPriceElement = document.getElementById('strcBreakevenPrice');
     const profitLossElement = document.getElementById('strcProfitLoss');
     const profitLossPercentElement = document.getElementById('strcProfitLossPercent');
     const dividendsReceivedElement = document.getElementById('strcDividendsReceived');
@@ -232,6 +237,9 @@ function renderStrcPositionError() {
 
     if (currentPriceElement) {
         currentPriceElement.textContent = 'Error';
+    }
+    if (breakevenPriceElement) {
+        breakevenPriceElement.textContent = 'unavailable';
     }
     if (profitLossElement) {
         profitLossElement.textContent = 'Error';
