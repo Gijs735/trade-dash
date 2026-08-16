@@ -21,6 +21,9 @@
         earlyRetirementSpending: 30000,
         earlyRetirementYears: 5,
         retirementSpending: 40000,
+        socialIncomeEnabled: true,
+        socialIncomeYears: 5,
+        socialIncomeMonthlyAmount: 1500,
         guardrailEnabled: true,
         guardrailDropPercent: 20,
         guardrailCutAmount: 5000,
@@ -190,6 +193,8 @@
         normalized.earlyRetirementSpending = Math.max(0, normalized.earlyRetirementSpending);
         normalized.earlyRetirementYears = Math.max(0, normalized.earlyRetirementYears);
         normalized.retirementSpending = Math.max(0, normalized.retirementSpending);
+        normalized.socialIncomeYears = Math.max(0, normalized.socialIncomeYears);
+        normalized.socialIncomeMonthlyAmount = Math.max(0, normalized.socialIncomeMonthlyAmount);
         normalized.guardrailDropPercent = clamp(normalized.guardrailDropPercent, 0, 95);
         normalized.guardrailCutAmount = Math.max(0, normalized.guardrailCutAmount);
         normalized.cashReserveYears = Math.max(0, normalized.cashReserveYears);
@@ -429,11 +434,17 @@
         let webn = Math.max(0, initialLiquid - cash);
         let highWater = cash + webn;
         const records = [];
+        const socialIncomeDurationMonths = getSocialIncomeDurationMonths(settings);
 
         for (let month = fireMonth, monthIndex = 0; month <= endMonth; month = addMonths(month, 1), monthIndex += 1) {
             const events = [];
             if (monthIndex === 0) {
                 events.push('FIRE starts');
+                if (socialIncomeDurationMonths > 0) {
+                    events.push('Social income starts');
+                }
+            } else if (monthIndex === socialIncomeDurationMonths) {
+                events.push('Social income ends');
             }
             cash *= 1 + cashMonthlyReturn;
             webn *= 1 + webnMonthlyReturn;
@@ -468,7 +479,8 @@
             const annualSpending = getAnnualSpending(settings, monthIndex, guardrailActive);
             const monthlySpending = annualSpending / 12;
             const rentalIncome = apartmentSold ? 0 : getApartmentMonthlyCashflow(settings, month, true);
-            const netWithdrawal = monthlySpending - rentalIncome;
+            const socialIncome = getSocialMonthlyIncome(settings, monthIndex);
+            const netWithdrawal = monthlySpending - rentalIncome - socialIncome;
             let failed = false;
 
             if (netWithdrawal >= 0) {
@@ -510,6 +522,7 @@
                     apartmentEquity,
                     annualSpending,
                     rentalIncome,
+                    socialIncome,
                     event: events.join(', '),
                     guardrailActive,
                     failed
@@ -562,6 +575,7 @@
                 apartmentEquity: apartmentSold ? 0 : Math.max(0, apartmentValue - loanBalanceOnDate(month)),
                 annualSpending: 0,
                 rentalIncome: monthlyCashflow,
+                socialIncome: 0,
                 event: events.join(', '),
                 guardrailActive: false,
                 failed: false
@@ -597,6 +611,25 @@
 
     function getCashReserveTarget(settings, monthIndex, guardrailActive) {
         return getAnnualSpending(settings, monthIndex, guardrailActive) * Math.max(0, settings.cashReserveYears);
+    }
+
+    function getSocialMonthlyIncome(settings, monthIndex) {
+        const durationMonths = getSocialIncomeDurationMonths(settings);
+        if (durationMonths <= 0) {
+            return 0;
+        }
+
+        return monthIndex < durationMonths
+            ? Math.max(0, settings.socialIncomeMonthlyAmount)
+            : 0;
+    }
+
+    function getSocialIncomeDurationMonths(settings) {
+        if (!settings.socialIncomeEnabled || settings.socialIncomeYears <= 0) {
+            return 0;
+        }
+
+        return Math.ceil(settings.socialIncomeYears * 12);
     }
 
     function getApartmentMonthlyCashflow(settings, month, afterFire) {
@@ -1092,6 +1125,7 @@
                 formatEur(record.cash),
                 formatEur(record.apartmentEquity),
                 record.annualSpending ? formatEur(record.annualSpending) : '--',
+                record.socialIncome ? formatEur(record.socialIncome) : '--',
                 record.event || (record.guardrailActive ? 'Guardrail' : '')
             ].forEach((value) => {
                 const cell = document.createElement('td');

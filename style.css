@@ -854,6 +854,11 @@ h1 {
     grid-column: span 2;
 }
 
+.bridge-control-social {
+    grid-column: span 1;
+    grid-template-columns: 1fr;
+}
+
 .bridge-control-title {
     grid-column: 1 / -1;
     margin: 0 0 4px;
@@ -1088,7 +1093,8 @@ h1 {
 
     .bridge-control-primary,
     .bridge-control-compact,
-    .bridge-control-half {
+    .bridge-control-half,
+    .bridge-control-social {
         grid-column: span 1;
     }
 
@@ -1160,7 +1166,8 @@ h1 {
     .bridge-kpi-grid,
     .bridge-controls-grid,
     .bridge-control-panel,
-    .bridge-control-wide {
+    .bridge-control-wide,
+    .bridge-control-social {
         grid-template-columns: 1fr;
     }
 
