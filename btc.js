@@ -9,7 +9,7 @@ const candleCacheKey = `shorty:BTC-EUR:daily-candles:${chartHistoryMonths}m:v1`;
 const chartUpColor = '#4aa38c';
 const chartDownColor = '#ef5350';
 let sellPrice = 92000; // sell price in EUR
-let currentEurHoldings = 342000; // current EUR holdings
+let currentEurHoldings = 355500; // current EUR holdings
 let holdingsInputDebounceId;
 let shortEntryInputDebounceId;
 let hasLoadedPriceChart = false;

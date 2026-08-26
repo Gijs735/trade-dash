@@ -83,23 +83,23 @@ assert.equal(defaults.socialIncomeYears, 5);
 assert.equal(defaults.socialIncomeMonthlyAmount, 1500);
 
 const defaultResult = calc.evaluateBridgeFire(defaults, { today });
-assert.equal(month(defaultResult.earliestFireMonth), '2031-08');
-assert.equal(month(defaultResult.fireMonth), '2031-08');
+assert.equal(month(defaultResult.earliestFireMonth), '2031-04');
+assert.equal(month(defaultResult.fireMonth), '2031-04');
 assert.equal(defaultResult.success, true);
 assert.equal(defaultResult.inheritanceTrigger.parent, 'mom');
 assert.equal(defaultResult.inheritanceTrigger.label, 'Mom');
 assert.equal(month(defaultResult.inheritanceMonth), '2060-03');
 approx(defaultResult.currentLoanBalance, 196931.55);
 approx(defaultResult.currentApartmentEquity, 100068.45);
-approx(defaultResult.currentNetWorth, 442068.45);
+approx(defaultResult.currentNetWorth, 455568.45);
 assert.ok(defaultResult.requiredLiquidAtFireFuture > defaultResult.requiredLiquidAtFire);
 assert.ok(defaultResult.requiredLiquidAtFireFuture > recordFor(defaultResult, month(defaultResult.fireMonth)).liquid);
 assert.ok(defaultResult.requiredLiquidAtFireFuture < defaultResult.projectedLiquidAtFireFuture);
 assert.match(recordFor(defaultResult, month(defaultResult.fireMonth)).event, /FIRE starts/);
 assert.match(recordFor(defaultResult, month(defaultResult.fireMonth)).event, /Social income starts/);
 assert.equal(recordFor(defaultResult, month(defaultResult.fireMonth)).socialIncome, 1500);
-assert.match(recordFor(defaultResult, '2036-08').event, /Social income ends/);
-assert.equal(recordFor(defaultResult, '2036-08').socialIncome, 0);
+assert.match(recordFor(defaultResult, '2036-04').event, /Social income ends/);
+assert.equal(recordFor(defaultResult, '2036-04').socialIncome, 0);
 assert.equal(Math.round(recordFor(defaultResult, month(defaultResult.fireMonth)).cash), 90000);
 
 const socialIncomeOff = calc.evaluateBridgeFire({
@@ -114,7 +114,7 @@ const manualLater = calc.evaluateBridgeFire({
     fireMode: 'manual',
     manualFireAge: 40.3
 }, { today });
-assert.equal(month(manualLater.earliestFireMonth), '2031-08');
+assert.equal(month(manualLater.earliestFireMonth), '2031-04');
 assert.equal(month(manualLater.fireMonth), '2036-01');
 assert.equal(manualLater.success, true);
 assert.ok(manualLater.projectedLiquidAtFire > defaultResult.projectedLiquidAtFire);
@@ -126,7 +126,7 @@ const manualTooEarly = calc.evaluateBridgeFire({
 }, { today });
 assert.equal(month(manualTooEarly.fireMonth), '2030-01');
 assert.equal(manualTooEarly.success, false);
-assert.equal(month(manualTooEarly.retirement.failMonth), '2052-09');
+assert.equal(month(manualTooEarly.retirement.failMonth), '2054-03');
 
 const webnLow = calc.evaluateBridgeFire({
     ...defaults,

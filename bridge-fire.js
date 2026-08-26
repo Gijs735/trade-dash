@@ -9,7 +9,7 @@
 
     const defaultSettings = {
         birthdate: '1995-09-15',
-        liquidPortfolio: 342000,
+        liquidPortfolio: 355500,
         preFireReturnPercent: 8,
         webnReturnPercent: 4,
         cashReturnPercent: 2,
