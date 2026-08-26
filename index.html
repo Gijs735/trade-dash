@@ -16,7 +16,7 @@
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon-180x180.png">
     <link rel="apple-touch-icon" href="/apple-touch-icon.png">
     <link rel="apple-touch-icon-precomposed" sizes="180x180" href="/apple-touch-icon-precomposed.png">
-    <link rel="stylesheet" href="style.css?v=40">
+    <link rel="stylesheet" href="style.css?v=48">
 </head>
 <body>
 <nav class="app-tabbar" aria-label="Dashboard tabs">
@@ -116,33 +116,18 @@
         </details>
     </section>
 
-    <section class="strc-panel" aria-label="STRC position">
-        <div class="strc-panel-header">
-            <div>
-                <p class="holdings-label">STRC position</p>
-                <p class="strc-panel-subtitle">
-                    Entry FX 1.1594 EUR/USD · Current FX <span id="strcFxRate">Loading...</span>
-                </p>
-            </div>
-        </div>
-        <div class="strc-metric-grid">
-            <div class="strc-metric">
-                <p>Current price</p>
-                <h2 id="strcCurrentPrice">Loading...</h2>
-            </div>
-            <div class="strc-metric">
-                <p>My entry</p>
-                <h2>USD 90.99</h2>
-            </div>
-            <div class="strc-metric">
-                <p>Profit / loss · Breakeven <span id="strcBreakevenPrice">Loading...</span></p>
-                <h2 id="strcProfitLoss">Loading...</h2>
-                <div class="strc-profit-meta">
-                    <span id="strcProfitLossPercent" class="strc-metric-note"></span>
-                    <span id="strcDividendsReceived" class="strc-metric-note"></span>
+    <section class="chart-disclosure trade-history-disclosure" aria-label="Trade history">
+        <details id="tradeHistoryPanel" class="chart-panel trade-history-panel">
+            <summary class="chart-tab">
+                <span class="chart-tab-title">Trade history</span>
+                <span class="chart-tab-icon" aria-hidden="true"></span>
+            </summary>
+            <div class="chart-body">
+                <div id="tradeHistoryList" class="trade-history-list">
+                    <p class="trade-history-status">Loading trade history...</p>
                 </div>
             </div>
-        </div>
+        </details>
     </section>
 
     <section class="holdings-panel" aria-label="Short entry settings">
@@ -443,7 +428,7 @@
 </main>
 
 <script src="btc.js?v=24"></script>
-<script src="strc.js?v=11"></script>
+<script src="trade-history.js?v=9"></script>
 <script src="bridge-fire.js?v=19"></script>
 <script>
 const refreshIntervalMs = 10000;
@@ -521,7 +506,7 @@ async function refreshTradeInfo() {
     updateTimer();
     await Promise.allSettled([
         updateTradeInfo(),
-        updateStrcPositionWidget()
+        updateTradeHistory()
     ]);
     if (activeDashboardTab !== 'shorty') {
         return;

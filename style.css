@@ -440,59 +440,69 @@ h1 {
     font-size: 0.95rem;
 }
 
-.strc-panel {
-    margin-top: 16px;
+.trade-history-list {
+    display: grid;
+    gap: 10px;
+}
+
+.trade-history-status {
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.92rem;
+}
+
+.trade-history-panel .chart-body {
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.032), rgba(255, 255, 255, 0.018));
+}
+
+.trade-card {
     padding: 14px 16px 16px;
     border: 1px solid var(--border);
     border-radius: 8px;
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.028));
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.032), rgba(255, 255, 255, 0.018));
     box-shadow: 0 14px 32px var(--shadow);
 }
 
-.strc-panel-header {
+.trade-history-panel .chart-tab {
+    grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.trade-card-header {
     display: block;
     margin-bottom: 12px;
 }
 
-.strc-panel-subtitle {
+.trade-card-subtitle {
     margin: 3px 0 0;
     color: var(--muted);
     font-size: 0.78rem;
     line-height: 1.3;
 }
 
-#strcFxRate {
+.trade-card-subtitle .is-profit,
+.trade-card-subtitle .is-loss {
     font-weight: 700;
 }
 
-#strcFxRate.is-favorable {
-    color: #22c55e;
-}
-
-#strcFxRate.is-unfavorable {
-    color: #ef4444;
-}
-
-.strc-metric-grid {
+.trade-metric-grid {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 8px;
 }
 
-.strc-metric {
-    min-height: 74px;
+.trade-metric {
+    min-height: 116px;
     padding: 11px 12px;
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.07);
     border-radius: 7px;
     background: rgba(15, 15, 16, 0.22);
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    gap: 7px;
+    display: grid;
+    grid-template-rows: auto auto 1fr;
+    gap: 8px;
     min-width: 0;
 }
 
-.strc-metric p {
+.trade-metric p {
     margin: 0;
     color: var(--muted);
     font-size: 0.78rem;
@@ -500,7 +510,7 @@ h1 {
     line-height: 1.25;
 }
 
-.strc-metric h2 {
+.trade-metric h2 {
     margin: 0;
     color: var(--text);
     font-size: clamp(1.16rem, 2.2vw, 1.55rem);
@@ -508,41 +518,48 @@ h1 {
     overflow-wrap: anywhere;
 }
 
-.strc-metric h2.is-profit {
+.trade-metric .is-profit,
+.trade-card-subtitle .is-profit {
     color: #22c55e;
 }
 
-.strc-metric h2.is-loss {
+.trade-metric .is-loss,
+.trade-card-subtitle .is-loss {
     color: #ef4444;
 }
 
-.strc-metric-note {
-    min-height: 1em;
+.trade-detail-list {
+    display: grid;
+    align-content: end;
+    gap: 5px;
+    min-width: 0;
+}
+
+.trade-detail-list-top {
+    align-content: start;
+}
+
+.trade-detail {
+    display: grid;
+    grid-template-columns: minmax(64px, auto) minmax(0, 1fr);
+    gap: 8px;
+    align-items: baseline;
+    min-width: 0;
     color: var(--muted);
-    font-size: 0.76rem;
+    font-size: 0.74rem;
+    line-height: 1.2;
+}
+
+.trade-detail span {
+    min-width: 0;
+}
+
+.trade-detail strong {
+    min-width: 0;
+    color: #d8d8dc;
     font-weight: 700;
-    line-height: 1;
-}
-
-.strc-profit-meta {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-    min-width: 0;
-}
-
-.strc-profit-meta .strc-metric-note {
-    min-width: 0;
-}
-
-.strc-profit-meta .strc-metric-note:last-child {
-    flex: 0 0 auto;
     text-align: right;
-}
-
-.strc-metric-note.has-dividends {
-    color: #22c55e;
+    overflow-wrap: anywhere;
 }
 
 .holdings-panel {
@@ -1255,27 +1272,35 @@ h1 {
         height: calc(100% - 40px);
     }
 
-    .strc-panel {
-        margin-top: 12px;
+    .trade-card {
         padding: 12px;
     }
 
-    .strc-panel-header {
+    .trade-card-header {
         margin-bottom: 10px;
     }
 
-    .strc-metric-grid {
+    .trade-metric-grid {
         grid-template-columns: 1fr;
         gap: 8px;
     }
 
-    .strc-metric {
-        min-height: 68px;
+    .trade-metric {
+        min-height: 116px;
         padding: 12px;
     }
 
-    .strc-metric h2 {
+    .trade-metric h2 {
         font-size: 1.08rem;
+    }
+
+    .trade-detail {
+        grid-template-columns: 1fr;
+        gap: 2px;
+    }
+
+    .trade-detail strong {
+        text-align: left;
     }
 
     .holdings-panel {
