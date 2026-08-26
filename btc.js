@@ -10,12 +10,10 @@ const chartUpColor = '#4aa38c';
 const chartDownColor = '#ef5350';
 let sellPrice = 92000; // sell price in EUR
 let currentEurHoldings = 355500; // current EUR holdings
-let holdingsInputDebounceId;
-let shortEntryInputDebounceId;
 let hasLoadedPriceChart = false;
 let hasPreloadedPriceChart = false;
 let lightweightChartsLoadPromise;
-let priceChartState = {
+const priceChartState = {
     chart: null,
     candlestickSeries: null,
     volumeSeries: null,
@@ -48,25 +46,16 @@ async function getBTCPriceEUR() {
 
 async function evaluateShortTrade(sellPrice, currentEurHoldings) {
     const btcPrice = await getBTCPriceEUR();
-    // BTC bought back = current EUR holdings / current BTC price
     const btcBoughtBack = currentEurHoldings / btcPrice;
-    // BTC originally sold = current EUR holdings / sell price
     const btcSold = currentEurHoldings / sellPrice;
-    // If btcBoughtBack > btcSold, the short was successful
-    const wasSuccessful = btcBoughtBack > btcSold;
-    // BTC gained or lost
     const btcDelta = btcBoughtBack - btcSold;
-    
-    // Calculate profit or loss percentage
-    // Profit/Loss % = (btcDelta / btcSold) * 100
-    const profitLossPercent = parseFloat(((btcDelta / btcSold) * 100).toFixed(2));
 
     return {
         btcBoughtBack,
-        wasSuccessful,
+        wasSuccessful: btcDelta > 0,
         btcDelta,
         btcPrice,
-        profitLossPercent
+        profitLossPercent: Number(((btcDelta / btcSold) * 100).toFixed(2))
     };
 }
 
@@ -74,98 +63,75 @@ async function updateTradeInfo() {
     try {
         syncCurrentEurHoldingsFromInput();
         syncSellPriceFromInput();
-        // 348390.65 is the EUR holdings with interest exluding tax the above is including tax
         const result = await evaluateShortTrade(sellPrice, currentEurHoldings);
         const color = result.wasSuccessful ? '#22c55e' : '#ef4444';
         const plusminus = result.wasSuccessful ? '+' : '';
+        const metricText = {
+            delta: plusminus + result.btcDelta.toFixed(4),
+            total: '₿ ' + result.btcBoughtBack.toFixed(4),
+            currentPrice: '€ ' + result.btcPrice,
+            percent: plusminus + result.profitLossPercent + '%'
+        };
 
-        // Update the text content of the elements with the results
-        document.getElementById('delta').textContent = plusminus + result.btcDelta.toFixed(4);
-        document.getElementById('total').textContent = '₿ ' + result.btcBoughtBack.toFixed(4);
-        document.getElementById('currentPrice').textContent = '€ ' + result.btcPrice;
-        document.getElementById('percent').textContent = plusminus + result.profitLossPercent + '%';
+        Object.entries(metricText).forEach(([id, text]) => {
+            const element = document.getElementById(id);
+            element.textContent = text;
+            element.style.color = color;
+        });
         updateLiveChartPrice(result.btcPrice);
-        
-        // Change the color of the text based on success or failure of the trade
-        document.getElementById('delta').style.color = color;
-        document.getElementById('total').style.color = color;
-        document.getElementById('currentPrice').style.color = color;
-        document.getElementById('percent').style.color = color;
 
-        console.log('Trade info updated');
         return result;
     } catch (err) {
-        document.getElementById('delta').textContent = 'Error';
-        document.getElementById('total').textContent = 'Error';
-        document.getElementById('currentPrice').textContent = 'Error';
-        document.getElementById('percent').textContent = 'Error';
+        ['delta', 'total', 'currentPrice', 'percent'].forEach((id) => {
+            document.getElementById(id).textContent = 'Error';
+        });
         console.error(err);
         return null;
     }
 }
 
 function syncCurrentEurHoldingsFromInput() {
-    const input = document.getElementById('currentEurHoldings');
-    if (!input) {
-        return currentEurHoldings;
-    }
-
-    if (input.value.trim() === '') {
-        return currentEurHoldings;
-    }
-
-    const nextValue = Number(input.value);
-    if (Number.isFinite(nextValue) && nextValue > 0) {
-        currentEurHoldings = nextValue;
-    }
-
+    currentEurHoldings = readPositiveInput('currentEurHoldings', currentEurHoldings);
     return currentEurHoldings;
 }
 
 function syncSellPriceFromInput() {
-    const input = document.getElementById('shortEntryPrice');
-    if (!input) {
-        return sellPrice;
-    }
-
-    if (input.value.trim() === '') {
-        return sellPrice;
-    }
-
-    const nextValue = Number(input.value);
-    if (Number.isFinite(nextValue) && nextValue > 0) {
-        sellPrice = nextValue;
-    }
-
+    sellPrice = readPositiveInput('shortEntryPrice', sellPrice);
     return sellPrice;
 }
 
-function setupHoldingsInput(onChange) {
-    const input = document.getElementById('currentEurHoldings');
-    if (!input) {
-        return;
+function readPositiveInput(id, fallback) {
+    const input = document.getElementById(id);
+    const value = input?.value.trim();
+    if (!value) {
+        return fallback;
     }
 
-    input.value = String(Math.round(currentEurHoldings));
-    input.addEventListener('input', () => {
-        syncCurrentEurHoldingsFromInput();
-        window.clearTimeout(holdingsInputDebounceId);
-        holdingsInputDebounceId = window.setTimeout(onChange, 350);
-    });
+    const number = Number(value);
+    return Number.isFinite(number) && number > 0 ? number : fallback;
+}
+
+function setupHoldingsInput(onChange) {
+    setupNumberInput('currentEurHoldings', currentEurHoldings, syncCurrentEurHoldingsFromInput, onChange);
 }
 
 function setupShortEntryInput(onChange) {
-    const input = document.getElementById('shortEntryPrice');
+    setupNumberInput('shortEntryPrice', sellPrice, syncSellPriceFromInput, onChange, updateEntryPriceLine);
+}
+
+function setupNumberInput(id, initialValue, syncValue, onChange, afterSync) {
+    const input = document.getElementById(id);
     if (!input) {
         return;
     }
 
-    input.value = String(Math.round(sellPrice));
+    let debounceId;
+    input.value = String(Math.round(initialValue));
     input.addEventListener('input', () => {
-        syncSellPriceFromInput();
-        updateEntryPriceLine();
-        window.clearTimeout(shortEntryInputDebounceId);
-        shortEntryInputDebounceId = window.setTimeout(onChange, 350);
+        syncValue();
+        afterSync?.();
+        window.clearTimeout(debounceId);
+        debounceId = window.setTimeout(onChange, 350);
     });
 }
 
@@ -241,7 +207,6 @@ async function loadPriceChart() {
     }
 
     hasLoadedPriceChart = true;
-    chartHost.classList.add('is-loading');
     setChartStatus('Chart loading...');
 
     try {
@@ -255,10 +220,8 @@ async function loadPriceChart() {
             console.warn('Live chart price unavailable', err);
         }
         setChartStatus('');
-        chartHost.classList.remove('is-loading');
     } catch (err) {
         hasLoadedPriceChart = false;
-        chartHost.classList.remove('is-loading');
         setChartStatus('Chart unavailable');
         console.error(err);
     }
@@ -291,6 +254,45 @@ function loadLightweightCharts() {
     return lightweightChartsLoadPromise;
 }
 
+function createDarkChart(chartElement, options) {
+    const LightweightCharts = window.LightweightCharts;
+    const rightPriceScale = {
+        borderColor: 'rgba(255, 255, 255, 0.08)',
+        scaleMargins: {
+            top: 0.08,
+            bottom: options.bottomMargin
+        }
+    };
+    if (options.autoScale) {
+        rightPriceScale.autoScale = true;
+    }
+
+    return LightweightCharts.createChart(chartElement, {
+        autoSize: true,
+        layout: {
+            background: { type: 'solid', color: options.backgroundColor },
+            textColor: '#b8b8bd',
+            fontFamily: 'Arial, sans-serif'
+        },
+        grid: {
+            vertLines: { color: 'rgba(255, 255, 255, 0.06)' },
+            horzLines: { color: 'rgba(255, 255, 255, 0.06)' }
+        },
+        rightPriceScale,
+        timeScale: {
+            borderColor: 'rgba(255, 255, 255, 0.08)',
+            timeVisible: false,
+            secondsVisible: false
+        },
+        crosshair: {
+            mode: LightweightCharts.CrosshairMode?.Normal ?? 0
+        },
+        localization: {
+            priceFormatter: options.priceFormatter
+        }
+    });
+}
+
 async function fetchCoinbaseDailyCandles() {
     const cachedCandles = getCachedDailyCandles();
     if (cachedCandles) {
@@ -318,6 +320,7 @@ async function fetchCoinbaseDailyCandles() {
 }
 
 function normalizeCoinbaseDailyCandles(candles) {
+    const seenTimes = new Set();
     return candles
         .map(([time, low, high, open, close, volume]) => ({
             time: Number(time),
@@ -327,17 +330,13 @@ function normalizeCoinbaseDailyCandles(candles) {
             close: Number(close),
             volume: Number(volume)
         }))
-        .filter((candle) => (
-            Number.isFinite(candle.time)
-            && Number.isFinite(candle.open)
-            && Number.isFinite(candle.high)
-            && Number.isFinite(candle.low)
-            && Number.isFinite(candle.close)
-            && Number.isFinite(candle.volume)
-        ))
-        .filter((candle, index, allCandles) => (
-            allCandles.findIndex((candidate) => candidate.time === candle.time) === index
-        ))
+        .filter((candle) => {
+            if (!isValidDailyCandle(candle) || seenTimes.has(candle.time)) {
+                return false;
+            }
+            seenTimes.add(candle.time);
+            return true;
+        })
         .sort((a, b) => a.time - b.time);
 }
 
@@ -466,37 +465,11 @@ function initializePriceChart(dailyCandles, weeklyCandles) {
     priceChartState.dailyCandles = dailyCandles;
     priceChartState.weeklyCandles = weeklyCandles;
 
-    const LightweightCharts = window.LightweightCharts;
-    const chart = LightweightCharts.createChart(chartElement, {
-        autoSize: true,
-        layout: {
-            background: { type: 'solid', color: '#0f0f10' },
-            textColor: '#b8b8bd',
-            fontFamily: 'Arial, sans-serif'
-        },
-        grid: {
-            vertLines: { color: 'rgba(255, 255, 255, 0.06)' },
-            horzLines: { color: 'rgba(255, 255, 255, 0.06)' }
-        },
-        rightPriceScale: {
-            autoScale: true,
-            borderColor: 'rgba(255, 255, 255, 0.08)',
-            scaleMargins: {
-                top: 0.08,
-                bottom: 0.18
-            }
-        },
-        timeScale: {
-            borderColor: 'rgba(255, 255, 255, 0.08)',
-            timeVisible: false,
-            secondsVisible: false
-        },
-        crosshair: {
-            mode: LightweightCharts.CrosshairMode?.Normal ?? 0
-        },
-        localization: {
-            priceFormatter: (price) => formatChartPrice(price)
-        }
+    const chart = createDarkChart(chartElement, {
+        autoScale: true,
+        backgroundColor: '#0f0f10',
+        bottomMargin: 0.18,
+        priceFormatter: formatChartPrice
     });
 
     const candlestickSeries = addChartSeries(chart, 'candlestick', {
@@ -607,6 +580,10 @@ function addChartSeries(chart, type, options) {
     }
     return chart.addLineSeries(options);
 }
+
+window.loadLightweightCharts = loadLightweightCharts;
+window.addChartSeries = addChartSeries;
+window.createDarkChart = createDarkChart;
 
 function toCandlestickData(candle) {
     return {

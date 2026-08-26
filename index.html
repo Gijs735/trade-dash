@@ -13,9 +13,9 @@
     <link rel="icon" type="image/png" sizes="256x256" href="/favicon.png?v=5">
     <link rel="apple-touch-icon" sizes="152x152" href="/apple-touch-icon-152x152.png">
     <link rel="apple-touch-icon" sizes="167x167" href="/apple-touch-icon-167x167.png">
-    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon-180x180.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
     <link rel="apple-touch-icon" href="/apple-touch-icon.png">
-    <link rel="apple-touch-icon-precomposed" sizes="180x180" href="/apple-touch-icon-precomposed.png">
+    <link rel="apple-touch-icon-precomposed" sizes="180x180" href="/apple-touch-icon.png">
     <link rel="stylesheet" href="style.css?v=48">
 </head>
 <body>
@@ -116,7 +116,7 @@
         </details>
     </section>
 
-    <section class="chart-disclosure trade-history-disclosure" aria-label="Trade history">
+    <section class="chart-disclosure" aria-label="Trade history">
         <details id="tradeHistoryPanel" class="chart-panel trade-history-panel">
             <summary class="chart-tab">
                 <span class="chart-tab-title">Trade history</span>
@@ -124,7 +124,66 @@
             </summary>
             <div class="chart-body">
                 <div id="tradeHistoryList" class="trade-history-list">
-                    <p class="trade-history-status">Loading trade history...</p>
+                    <article class="trade-card">
+                        <div class="trade-card-header"><div><p class="holdings-label">STRC trade</p><p class="trade-card-subtitle">Entry FX 1.1594 EUR/USD · Sale FX 1.1699 EUR/USD (ECB)</p></div></div>
+                        <div class="trade-metric-grid">
+                            <div class="trade-metric">
+                                <p>Entry</p>
+                                <h2>USD 90.99</h2>
+                                <div class="trade-detail-list">
+                                    <div class="trade-detail"><span>Date</span><strong>Jun 17, 2026</strong></div>
+                                    <div class="trade-detail"><span>Shares</span><strong>4,360</strong></div>
+                                    <div class="trade-detail"><span>Cost</span><strong>USD 396,716.40</strong></div>
+                                </div>
+                            </div>
+                            <div class="trade-metric">
+                                <p>Exit</p>
+                                <h2>USD 95.67</h2>
+                                <div class="trade-detail-list">
+                                    <div class="trade-detail"><span>Date</span><strong>Aug 21, 2026</strong></div>
+                                    <div class="trade-detail"><span>Proceeds</span><strong>USD 417,107.67</strong></div>
+                                    <div class="trade-detail"><span>Commission</span><strong class="is-loss">USD 34.86</strong></div>
+                                </div>
+                            </div>
+                            <div class="trade-metric">
+                                <p>Profit / loss</p>
+                                <h2 class="is-profit">+USD 29,020.44</h2>
+                                <div class="trade-detail-list">
+                                    <div class="trade-detail"><span>EUR at sale</span><strong class="is-profit">+€ 21,734.86</strong></div>
+                                    <div class="trade-detail"><span>Return</span><strong class="is-profit">+7.32%</strong></div>
+                                    <div class="trade-detail"><span>Dividends</span><strong class="is-profit">USD 8,629.17</strong></div>
+                                </div>
+                            </div>
+                        </div>
+                    </article>
+                    <article class="trade-card">
+                        <div class="trade-card-header"><div><p class="holdings-label">Nexo EURx 2025-2026</p><p class="trade-card-subtitle">Jun 12-13, 2025 to Jun 12-13, 2026</p></div></div>
+                        <div class="trade-metric-grid">
+                            <div class="trade-metric">
+                                <p>Entry</p>
+                                <h2>€ 313,865.45</h2>
+                                <div class="trade-detail-list">
+                                    <div class="trade-detail"><span>Date</span><strong>Jun 12-13, 2025</strong></div>
+                                    <div class="trade-detail"><span>Type</span><strong>Lending</strong></div>
+                                </div>
+                            </div>
+                            <div class="trade-metric">
+                                <p>Exit</p>
+                                <h2>€ 345,385.04</h2>
+                                <div class="trade-detail-list">
+                                    <div class="trade-detail"><span>Unlock</span><strong>Jun 12-13, 2026</strong></div>
+                                    <div class="trade-detail"><span>Duration</span><strong>365 days</strong></div>
+                                </div>
+                            </div>
+                            <div class="trade-metric">
+                                <p>Profit</p>
+                                <h2 class="is-profit">+EUR 31,519.59</h2>
+                                <div class="trade-detail-list trade-detail-list-top">
+                                    <div class="trade-detail"><span>Return</span><strong class="is-profit">+10.04%</strong></div>
+                                </div>
+                            </div>
+                        </div>
+                    </article>
                 </div>
             </div>
         </details>
@@ -232,169 +291,61 @@
                 <fieldset class="bridge-panel bridge-control-panel bridge-control-primary" aria-label="Portfolio">
                     <div class="bridge-control-title" aria-hidden="true">Portfolio</div>
                     <div class="bridge-segmented bridge-mode-toggle" role="radiogroup" aria-label="FIRE date mode">
-                        <label>
-                            <input type="radio" name="fireMode" value="earliest" data-fire-setting="fireMode">
-                            <span>Auto earliest</span>
-                        </label>
-                        <label>
-                            <input type="radio" name="fireMode" value="manual" data-fire-setting="fireMode">
-                            <span>Manual age</span>
-                        </label>
+                        <label><input type="radio" name="fireMode" value="earliest" data-fire-setting="fireMode"><span>Auto earliest</span></label>
+                        <label><input type="radio" name="fireMode" value="manual" data-fire-setting="fireMode"><span>Manual age</span></label>
                     </div>
-                    <label class="bridge-field bridge-range-field">
-                        <span class="bridge-range-heading">
-                            Manual FIRE age
-                            <strong id="bridgeManualFireAgeValue">40.0</strong>
-                        </span>
-                        <input type="range" min="30" max="105" step="0.1" data-fire-setting="manualFireAge">
-                    </label>
-                    <label class="bridge-field">
-                        <span>Liquid portfolio</span>
-                        <input type="number" min="0" step="1000" data-fire-setting="liquidPortfolio">
-                    </label>
-                    <label class="bridge-field">
-                        <span>Pre-FIRE real return</span>
-                        <input type="number" step="0.1" data-fire-setting="preFireReturnPercent">
-                    </label>
-                    <label class="bridge-field">
-                        <span>WEBN real return</span>
-                        <input type="number" step="0.1" data-fire-setting="webnReturnPercent">
-                    </label>
-                    <label class="bridge-field">
-                        <span>Cash real return</span>
-                        <input type="number" step="0.1" data-fire-setting="cashReturnPercent">
-                    </label>
-                    <label class="bridge-field">
-                        <span>Cash reserve years</span>
-                        <input type="number" min="0" step="0.25" data-fire-setting="cashReserveYears">
-                    </label>
-                    <label class="bridge-field">
-                        <span>Inflation assumption</span>
-                        <input type="number" step="0.1" data-fire-setting="inflationPercent">
-                    </label>
-                    <label class="bridge-field">
-                        <span>Life expectancy</span>
-                        <input type="number" min="60" max="120" step="1" data-fire-setting="lifeExpectancyAge">
-                    </label>
+                    <label class="bridge-field bridge-range-field"><span class="bridge-range-heading">Manual FIRE age<strong id="bridgeManualFireAgeValue">40.0</strong></span><input type="range" min="30" max="105" step="0.1" data-fire-setting="manualFireAge"></label>
+                    <label class="bridge-field"><span>Liquid portfolio</span><input type="number" min="0" step="1000" data-fire-setting="liquidPortfolio"></label>
+                    <label class="bridge-field"><span>Pre-FIRE real return</span><input type="number" step="0.1" data-fire-setting="preFireReturnPercent"></label>
+                    <label class="bridge-field"><span>WEBN real return</span><input type="number" step="0.1" data-fire-setting="webnReturnPercent"></label>
+                    <label class="bridge-field"><span>Cash real return</span><input type="number" step="0.1" data-fire-setting="cashReturnPercent"></label>
+                    <label class="bridge-field"><span>Cash reserve years</span><input type="number" min="0" step="0.25" data-fire-setting="cashReserveYears"></label>
+                    <label class="bridge-field"><span>Inflation assumption</span><input type="number" step="0.1" data-fire-setting="inflationPercent"></label>
+                    <label class="bridge-field"><span>Life expectancy</span><input type="number" min="60" max="120" step="1" data-fire-setting="lifeExpectancyAge"></label>
                 </fieldset>
 
                 <fieldset class="bridge-panel bridge-control-panel bridge-control-compact" aria-label="Spending">
                     <div class="bridge-control-title" aria-hidden="true">Spending</div>
-                    <label class="bridge-field">
-                        <span>First-years spending</span>
-                        <input type="number" min="0" step="1000" data-fire-setting="earlyRetirementSpending">
-                    </label>
-                    <label class="bridge-field">
-                        <span>First-years duration</span>
-                        <input type="number" min="0" step="1" data-fire-setting="earlyRetirementYears">
-                    </label>
-                    <label class="bridge-field">
-                        <span>Long-term spending</span>
-                        <input type="number" min="0" step="1000" data-fire-setting="retirementSpending">
-                    </label>
-                    <label class="bridge-toggle">
-                        <input type="checkbox" data-fire-setting="guardrailEnabled">
-                        <span>Guardrail spending cut</span>
-                    </label>
-                    <label class="bridge-field">
-                        <span>Portfolio drop trigger</span>
-                        <input type="number" min="0" max="95" step="1" data-fire-setting="guardrailDropPercent">
-                    </label>
-                    <label class="bridge-field">
-                        <span>Annual spending cut</span>
-                        <input type="number" min="0" step="500" data-fire-setting="guardrailCutAmount">
-                    </label>
+                    <label class="bridge-field"><span>First-years spending</span><input type="number" min="0" step="1000" data-fire-setting="earlyRetirementSpending"></label>
+                    <label class="bridge-field"><span>First-years duration</span><input type="number" min="0" step="1" data-fire-setting="earlyRetirementYears"></label>
+                    <label class="bridge-field"><span>Long-term spending</span><input type="number" min="0" step="1000" data-fire-setting="retirementSpending"></label>
+                    <label class="bridge-toggle"><input type="checkbox" data-fire-setting="guardrailEnabled"><span>Guardrail spending cut</span></label>
+                    <label class="bridge-field"><span>Portfolio drop trigger</span><input type="number" min="0" max="95" step="1" data-fire-setting="guardrailDropPercent"></label>
+                    <label class="bridge-field"><span>Annual spending cut</span><input type="number" min="0" step="500" data-fire-setting="guardrailCutAmount"></label>
                 </fieldset>
 
                 <fieldset class="bridge-panel bridge-control-panel bridge-control-wide" aria-label="Apartment">
                     <div class="bridge-control-title" aria-hidden="true">Apartment</div>
                     <div class="bridge-segmented" role="radiogroup" aria-label="Apartment strategy">
-                        <label>
-                            <input type="radio" name="apartmentStrategy" value="rentForever" data-fire-setting="apartmentStrategy">
-                            <span>Rent out forever</span>
-                        </label>
-                        <label>
-                            <input type="radio" name="apartmentStrategy" value="sellAtFire" data-fire-setting="apartmentStrategy">
-                            <span>Sell at FIRE</span>
-                        </label>
-                        <label>
-                            <input type="radio" name="apartmentStrategy" value="sellAtPayoff" data-fire-setting="apartmentStrategy">
-                            <span>Sell 2048</span>
-                        </label>
-                        <label>
-                            <input type="radio" name="apartmentStrategy" value="sellAtDate" data-fire-setting="apartmentStrategy">
-                            <span>Sell at specified date</span>
-                        </label>
+                        <label><input type="radio" name="apartmentStrategy" value="rentForever" data-fire-setting="apartmentStrategy"><span>Rent out forever</span></label>
+                        <label><input type="radio" name="apartmentStrategy" value="sellAtFire" data-fire-setting="apartmentStrategy"><span>Sell at FIRE</span></label>
+                        <label><input type="radio" name="apartmentStrategy" value="sellAtPayoff" data-fire-setting="apartmentStrategy"><span>Sell 2048</span></label>
+                        <label><input type="radio" name="apartmentStrategy" value="sellAtDate" data-fire-setting="apartmentStrategy"><span>Sell at specified date</span></label>
                     </div>
-                    <label class="bridge-field">
-                        <span>Apartment value</span>
-                        <input type="number" min="0" step="1000" data-fire-setting="apartmentValue">
-                    </label>
-                    <label class="bridge-field">
-                        <span>Real appreciation</span>
-                        <input type="number" step="0.1" data-fire-setting="apartmentRealAppreciationPercent">
-                    </label>
-                    <label class="bridge-field">
-                        <span>Pre-payoff rent</span>
-                        <input type="number" min="0" step="25" data-fire-setting="prePayoffRent">
-                    </label>
-                    <label class="bridge-field">
-                        <span>Mortgage payment</span>
-                        <input type="number" min="0" step="1" data-fire-setting="mortgagePayment">
-                    </label>
-                    <label class="bridge-field">
-                        <span>Post-payoff rent</span>
-                        <input type="number" min="0" step="25" data-fire-setting="postPayoffRent">
-                    </label>
-                    <label class="bridge-field">
-                        <span>Sell month</span>
-                        <input type="month" data-fire-setting="apartmentSaleMonth">
-                    </label>
-                    <label class="bridge-field">
-                        <span>Sale costs</span>
-                        <input type="number" min="0" max="25" step="0.1" data-fire-setting="apartmentSaleCostPercent">
-                    </label>
-                    <label class="bridge-toggle">
-                        <input type="checkbox" data-fire-setting="includePreFireApartmentCashflow">
-                        <span>Invest pre-FIRE apartment cashflow</span>
-                    </label>
+                    <label class="bridge-field"><span>Apartment value</span><input type="number" min="0" step="1000" data-fire-setting="apartmentValue"></label>
+                    <label class="bridge-field"><span>Real appreciation</span><input type="number" step="0.1" data-fire-setting="apartmentRealAppreciationPercent"></label>
+                    <label class="bridge-field"><span>Pre-payoff rent</span><input type="number" min="0" step="25" data-fire-setting="prePayoffRent"></label>
+                    <label class="bridge-field"><span>Mortgage payment</span><input type="number" min="0" step="1" data-fire-setting="mortgagePayment"></label>
+                    <label class="bridge-field"><span>Post-payoff rent</span><input type="number" min="0" step="25" data-fire-setting="postPayoffRent"></label>
+                    <label class="bridge-field"><span>Sell month</span><input type="month" data-fire-setting="apartmentSaleMonth"></label>
+                    <label class="bridge-field"><span>Sale costs</span><input type="number" min="0" max="25" step="0.1" data-fire-setting="apartmentSaleCostPercent"></label>
+                    <label class="bridge-toggle"><input type="checkbox" data-fire-setting="includePreFireApartmentCashflow"><span>Invest pre-FIRE apartment cashflow</span></label>
                 </fieldset>
 
                 <fieldset class="bridge-panel bridge-control-panel bridge-control-half" aria-label="Inheritance">
                     <div class="bridge-control-title" aria-hidden="true">Inheritance</div>
                     <p id="bridgeInheritanceSummary" class="bridge-control-note">Youngest parent reaches trigger age</p>
-                    <label class="bridge-field">
-                        <span>Dad birthdate</span>
-                        <input type="date" data-fire-setting="dadBirthdate">
-                    </label>
-                    <label class="bridge-field">
-                        <span>Mom birthdate</span>
-                        <input type="date" data-fire-setting="momBirthdate">
-                    </label>
-                    <label class="bridge-field">
-                        <span>Trigger age (youngest parent)</span>
-                        <input type="number" min="50" max="120" step="1" data-fire-setting="inheritanceTriggerAge">
-                    </label>
-                    <label class="bridge-field">
-                        <span>House value</span>
-                        <input type="number" min="0" step="10000" data-fire-setting="inheritanceHouseValue">
-                    </label>
+                    <label class="bridge-field"><span>Dad birthdate</span><input type="date" data-fire-setting="dadBirthdate"></label>
+                    <label class="bridge-field"><span>Mom birthdate</span><input type="date" data-fire-setting="momBirthdate"></label>
+                    <label class="bridge-field"><span>Trigger age (youngest parent)</span><input type="number" min="50" max="120" step="1" data-fire-setting="inheritanceTriggerAge"></label>
+                    <label class="bridge-field"><span>House value</span><input type="number" min="0" step="10000" data-fire-setting="inheritanceHouseValue"></label>
                 </fieldset>
 
                 <fieldset class="bridge-panel bridge-control-panel bridge-control-social" aria-label="Social income">
                     <div class="bridge-control-title" aria-hidden="true">Social income</div>
-                    <label class="bridge-toggle">
-                        <input type="checkbox" data-fire-setting="socialIncomeEnabled">
-                        <span>Enable social income</span>
-                    </label>
-                    <label class="bridge-field">
-                        <span>Duration years</span>
-                        <input type="number" min="0" step="0.5" data-fire-setting="socialIncomeYears">
-                    </label>
-                    <label class="bridge-field">
-                        <span>Monthly amount</span>
-                        <input type="number" min="0" step="50" data-fire-setting="socialIncomeMonthlyAmount">
-                    </label>
+                    <label class="bridge-toggle"><input type="checkbox" data-fire-setting="socialIncomeEnabled"><span>Enable social income</span></label>
+                    <label class="bridge-field"><span>Duration years</span><input type="number" min="0" step="0.5" data-fire-setting="socialIncomeYears"></label>
+                    <label class="bridge-field"><span>Monthly amount</span><input type="number" min="0" step="50" data-fire-setting="socialIncomeMonthlyAmount"></label>
                 </fieldset>
             </section>
 
@@ -428,7 +379,6 @@
 </main>
 
 <script src="btc.js?v=24"></script>
-<script src="trade-history.js?v=9"></script>
 <script src="bridge-fire.js?v=19"></script>
 <script>
 const refreshIntervalMs = 10000;
@@ -504,10 +454,7 @@ async function refreshTradeInfo() {
 
     nextUpdateAt = Date.now();
     updateTimer();
-    await Promise.allSettled([
-        updateTradeInfo(),
-        updateTradeHistory()
-    ]);
+    await updateTradeInfo();
     if (activeDashboardTab !== 'shorty') {
         return;
     }

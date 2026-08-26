@@ -1,11 +1,11 @@
 (function () {
     const storageKey = 'bridgeFire:settings:v1';
     const storageTtlMs = 30 * 24 * 60 * 60 * 1000;
-    const lightweightChartsScriptUrl = 'vendor/lightweight-charts.standalone.production.js?v=5.2.0';
     const chartLiquidColor = '#f2c46d';
     const chartCashColor = '#7ed1bb';
     const chartApartmentColor = '#8ab4f8';
-    let bridgeLightweightChartsLoadPromise;
+    const fireModes = ['earliest', 'manual'];
+    const apartmentStrategies = ['rentForever', 'sellAtFire', 'sellAtPayoff', 'sellAtDate'];
 
     const defaultSettings = {
         birthdate: '1995-09-15',
@@ -52,15 +52,41 @@
         payoffDate: parseDate('2048-10-23')
     };
 
-    const settingTypes = Object.fromEntries(Object.entries(defaultSettings).map(([key, value]) => [
-        key,
-        typeof value
-    ]));
+    const positiveSettings = [
+        'liquidPortfolio',
+        'earlyRetirementSpending',
+        'earlyRetirementYears',
+        'retirementSpending',
+        'socialIncomeYears',
+        'socialIncomeMonthlyAmount',
+        'guardrailCutAmount',
+        'cashReserveYears',
+        'apartmentValue',
+        'prePayoffRent',
+        'mortgagePayment',
+        'postPayoffRent',
+        'inheritanceHouseValue'
+    ];
+    const rangedSettings = {
+        preFireReturnPercent: [-99.9, 100],
+        webnReturnPercent: [-99.9, 100],
+        cashReturnPercent: [-99.9, 100],
+        inflationPercent: [-99.9, 100],
+        apartmentRealAppreciationPercent: [-99.9, 100],
+        lifeExpectancyAge: [60, 120],
+        guardrailDropPercent: [0, 95],
+        apartmentSaleCostPercent: [0, 25],
+        inheritanceTriggerAge: [50, 120]
+    };
+    const dateSettings = ['birthdate', 'dadBirthdate', 'momBirthdate'];
+    const enumSettings = {
+        fireMode: fireModes,
+        apartmentStrategy: apartmentStrategies
+    };
 
-    let bridgeFireState = {
+    const bridgeFireState = {
         settings: { ...defaultSettings },
         lastResult: null,
-        hasRendered: false,
         chart: null,
         liquidSeries: null,
         cashSeries: null,
@@ -90,7 +116,7 @@
 
     function bindBridgeFireControls() {
         document.querySelectorAll('[data-fire-setting]').forEach((control) => {
-            const eventName = control.type === 'checkbox' || control.type === 'radio' || control.tagName === 'SELECT'
+            const eventName = control.type === 'checkbox' || control.type === 'radio'
                 ? 'change'
                 : 'input';
             control.addEventListener(eventName, () => {
@@ -167,48 +193,27 @@
         if (settings.manualFireAge == null && isValidMonthString(settings.manualFireMonth)) {
             normalized.manualFireAge = ageOnDate(parseDate(normalized.birthdate), parseMonth(settings.manualFireMonth));
         }
-        if (!['earliest', 'manual'].includes(normalized.fireMode)) {
-            normalized.fireMode = defaultSettings.fireMode;
-        }
-        normalized.liquidPortfolio = Math.max(0, normalized.liquidPortfolio);
-        normalized.preFireReturnPercent = clampReturnPercent(normalized.preFireReturnPercent);
-        normalized.webnReturnPercent = clampReturnPercent(normalized.webnReturnPercent);
-        normalized.cashReturnPercent = clampReturnPercent(normalized.cashReturnPercent);
-        normalized.inflationPercent = clampReturnPercent(normalized.inflationPercent);
-        normalized.lifeExpectancyAge = clamp(normalized.lifeExpectancyAge, 60, 120);
-        if (!isValidDateString(normalized.birthdate)) {
-            normalized.birthdate = defaultSettings.birthdate;
-        }
-        if (!isValidDateString(normalized.dadBirthdate)) {
-            normalized.dadBirthdate = defaultSettings.dadBirthdate;
-        }
-        if (!isValidDateString(normalized.momBirthdate)) {
-            normalized.momBirthdate = defaultSettings.momBirthdate;
-        }
+        Object.entries(enumSettings).forEach(([key, values]) => {
+            if (!values.includes(normalized[key])) {
+                normalized[key] = defaultSettings[key];
+            }
+        });
+        positiveSettings.forEach((key) => {
+            normalized[key] = Math.max(0, normalized[key]);
+        });
+        Object.entries(rangedSettings).forEach(([key, [min, max]]) => {
+            normalized[key] = clamp(normalized[key], min, max);
+        });
+        dateSettings.forEach((key) => {
+            if (!isValidDateString(normalized[key])) {
+                normalized[key] = defaultSettings[key];
+            }
+        });
         normalized.manualFireAge = clamp(
             normalized.manualFireAge,
             getMinimumFireAge(normalized),
             Math.max(getMinimumFireAge(normalized), normalized.lifeExpectancyAge)
         );
-        normalized.earlyRetirementSpending = Math.max(0, normalized.earlyRetirementSpending);
-        normalized.earlyRetirementYears = Math.max(0, normalized.earlyRetirementYears);
-        normalized.retirementSpending = Math.max(0, normalized.retirementSpending);
-        normalized.socialIncomeYears = Math.max(0, normalized.socialIncomeYears);
-        normalized.socialIncomeMonthlyAmount = Math.max(0, normalized.socialIncomeMonthlyAmount);
-        normalized.guardrailDropPercent = clamp(normalized.guardrailDropPercent, 0, 95);
-        normalized.guardrailCutAmount = Math.max(0, normalized.guardrailCutAmount);
-        normalized.cashReserveYears = Math.max(0, normalized.cashReserveYears);
-        if (!['rentForever', 'sellAtFire', 'sellAtPayoff', 'sellAtDate'].includes(normalized.apartmentStrategy)) {
-            normalized.apartmentStrategy = defaultSettings.apartmentStrategy;
-        }
-        normalized.apartmentValue = Math.max(0, normalized.apartmentValue);
-        normalized.apartmentRealAppreciationPercent = clampReturnPercent(normalized.apartmentRealAppreciationPercent);
-        normalized.prePayoffRent = Math.max(0, normalized.prePayoffRent);
-        normalized.mortgagePayment = Math.max(0, normalized.mortgagePayment);
-        normalized.postPayoffRent = Math.max(0, normalized.postPayoffRent);
-        normalized.apartmentSaleCostPercent = clamp(normalized.apartmentSaleCostPercent, 0, 25);
-        normalized.inheritanceTriggerAge = clamp(normalized.inheritanceTriggerAge, 50, 120);
-        normalized.inheritanceHouseValue = Math.max(0, normalized.inheritanceHouseValue);
         if (!isValidMonthString(normalized.apartmentSaleMonth)) {
             normalized.apartmentSaleMonth = defaultSettings.apartmentSaleMonth;
         }
@@ -249,7 +254,7 @@
                 nextSettings[key] = control.checked;
                 return;
             }
-            nextSettings[key] = settingTypes[key] === 'number'
+            nextSettings[key] = typeof defaultSettings[key] === 'number'
                 ? Number(control.value)
                 : control.value;
         });
@@ -260,7 +265,6 @@
         syncManualFireAgeControls(bridgeFireState.settings);
         const result = evaluateBridgeFire(bridgeFireState.settings);
         bridgeFireState.lastResult = result;
-        bridgeFireState.hasRendered = true;
         renderKpis(result);
         renderChart(result);
         renderYearlyRows(result);
@@ -283,7 +287,6 @@
             inheritanceTrigger,
             currentLoanBalance,
             currentApartmentEquity,
-            currentApartmentValue,
             currentNetWorth,
             todayMonth,
             endMonth
@@ -341,7 +344,7 @@
             ? toFutureEuros(settings, requiredLiquidAtFire, todayMonth, fireMonth)
             : requiredLiquidAtFire;
         const retirement = simulateRetirement(settings, fireMonth, projectedLiquidAtFire, todayMonth, endMonth);
-        const preFireRecords = buildPreFireRecords(settings, todayMonth, fireMonth, projectedLiquidAtFire);
+        const preFireRecords = buildPreFireRecords(settings, todayMonth, fireMonth);
         return {
             success: retirement.success,
             fireMonth,
@@ -368,7 +371,7 @@
                 records: [],
                 failMonth: null
             },
-            records: buildPreFireRecords(settings, todayMonth, endMonth, projectedLiquidAtEnd)
+            records: buildPreFireRecords(settings, todayMonth, endMonth)
         };
     }
 
@@ -426,7 +429,7 @@
         const webnMonthlyReturn = monthlyRate(settings.webnReturnPercent);
         const cashMonthlyReturn = monthlyRate(settings.cashReturnPercent);
         const saleMonth = getApartmentSaleMonth(settings, fireMonth, todayMonth);
-        const inheritanceMonth = firstOfMonth(getInheritanceDate(settings));
+        const inheritanceMonth = firstOfMonth(getInheritanceTrigger(settings).date);
         let apartmentSold = Boolean(saleMonth && saleMonth < fireMonth);
         let inherited = false;
         let guardrailActive = false;
@@ -545,7 +548,7 @@
         };
     }
 
-    function buildPreFireRecords(settings, todayMonth, fireMonth, projectedLiquidAtFire) {
+    function buildPreFireRecords(settings, todayMonth, fireMonth) {
         const records = [];
         const monthlyReturn = monthlyRate(settings.preFireReturnPercent);
         let liquid = Math.max(0, settings.liquidPortfolio);
@@ -663,16 +666,11 @@
 
     function getApartmentSaleProceeds(settings, saleMonth, todayMonth) {
         const value = apartmentValueOnDate(settings, saleMonth, todayMonth);
-        const loanBalance = loanBalanceForSaleMonth(saleMonth);
+        const loanBalance = firstOfMonth(saleMonth) >= firstOfMonth(loan.payoffDate)
+            ? 0
+            : loanBalanceOnDate(saleMonth);
         const saleCosts = value * Math.max(0, settings.apartmentSaleCostPercent) / 100;
         return Math.max(0, value - loanBalance - saleCosts);
-    }
-
-    function loanBalanceForSaleMonth(saleMonth) {
-        if (firstOfMonth(saleMonth) >= firstOfMonth(loan.payoffDate)) {
-            return 0;
-        }
-        return loanBalanceOnDate(saleMonth);
     }
 
     function apartmentValueOnDate(settings, date, todayMonth = firstOfMonth(getToday())) {
@@ -709,10 +707,6 @@
             balance = roundCents(balance - principal);
         }
         return balance;
-    }
-
-    function getInheritanceDate(settings) {
-        return getInheritanceTrigger(settings).date;
     }
 
     function getInheritanceTrigger(settings) {
@@ -808,24 +802,15 @@
             chartElement.textContent = '';
         }
         try {
-            await loadBridgeLightweightCharts();
+            await window.loadLightweightCharts();
             ensureBridgeChart(chartElement);
-            const liquidData = records.map((record) => ({
-                time: toChartTime(record.date),
-                value: roundCents(record.liquid)
-            }));
-            const cashData = records.map((record) => ({
-                time: toChartTime(record.date),
-                value: roundCents(record.cash)
-            }));
-            const apartmentData = records.map((record) => ({
-                time: toChartTime(record.date),
-                value: roundCents(record.apartmentEquity)
-            }));
-
-            bridgeFireState.liquidSeries.setData(liquidData);
-            bridgeFireState.cashSeries.setData(cashData);
-            bridgeFireState.apartmentSeries.setData(apartmentData);
+            [
+                ['liquidSeries', 'liquid'],
+                ['cashSeries', 'cash'],
+                ['apartmentSeries', 'apartmentEquity']
+            ].forEach(([seriesName, recordKey]) => {
+                bridgeFireState[seriesName].setData(toBridgeSeriesData(records, recordKey));
+            });
             bridgeFireState.chart.timeScale().fitContent();
             addBridgeChartMarkers(result);
             scheduleBridgeEventLineRender(result);
@@ -836,130 +821,57 @@
         }
     }
 
-    function loadBridgeLightweightCharts() {
-        if (window.LightweightCharts) {
-            return Promise.resolve();
-        }
-        if (bridgeLightweightChartsLoadPromise) {
-            return bridgeLightweightChartsLoadPromise;
-        }
-
-        bridgeLightweightChartsLoadPromise = new Promise((resolve, reject) => {
-            const script = document.createElement('script');
-            script.src = lightweightChartsScriptUrl;
-            script.async = true;
-            script.onload = () => {
-                if (window.LightweightCharts) {
-                    resolve();
-                    return;
-                }
-                reject(new Error('Lightweight Charts failed to initialize'));
-            };
-            script.onerror = () => reject(new Error('Lightweight Charts failed to load'));
-            document.head.appendChild(script);
-        });
-        return bridgeLightweightChartsLoadPromise;
-    }
-
     function ensureBridgeChart(chartElement) {
         if (bridgeFireState.chart) {
             return;
         }
 
-        const LightweightCharts = window.LightweightCharts;
-        const chart = LightweightCharts.createChart(chartElement, {
-            autoSize: true,
-            layout: {
-                background: { type: 'solid', color: '#111213' },
-                textColor: '#b8b8bd',
-                fontFamily: 'Arial, sans-serif'
-            },
-            grid: {
-                vertLines: { color: 'rgba(255, 255, 255, 0.06)' },
-                horzLines: { color: 'rgba(255, 255, 255, 0.06)' }
-            },
-            rightPriceScale: {
-                borderColor: 'rgba(255, 255, 255, 0.08)',
-                scaleMargins: {
-                    top: 0.08,
-                    bottom: 0.12
-                }
-            },
-            timeScale: {
-                borderColor: 'rgba(255, 255, 255, 0.08)',
-                timeVisible: false,
-                secondsVisible: false
-            },
-            crosshair: {
-                mode: LightweightCharts.CrosshairMode?.Normal ?? 0
-            },
-            localization: {
-                priceFormatter: (price) => formatChartEur(price)
-            }
+        const chart = window.createDarkChart(chartElement, {
+            backgroundColor: '#111213',
+            bottomMargin: 0.12,
+            priceFormatter: formatChartEur
         });
 
         bridgeFireState.chart = chart;
-        bridgeFireState.liquidSeries = addBridgeSeries(chart, 'line', {
-            color: chartLiquidColor,
-            lineWidth: 3,
-            priceLineVisible: false,
-            lastValueVisible: true,
-            title: 'Liquid'
-        });
-        bridgeFireState.cashSeries = addBridgeSeries(chart, 'line', {
-            color: chartCashColor,
-            lineWidth: 2,
-            priceLineVisible: false,
-            lastValueVisible: true,
-            title: 'Cash'
-        });
-        bridgeFireState.apartmentSeries = addBridgeSeries(chart, 'line', {
-            color: chartApartmentColor,
-            lineWidth: 2,
-            priceLineVisible: false,
-            lastValueVisible: true,
-            title: 'Apartment equity'
+        [
+            ['liquidSeries', chartLiquidColor, 3, 'Liquid'],
+            ['cashSeries', chartCashColor, 2, 'Cash'],
+            ['apartmentSeries', chartApartmentColor, 2, 'Apartment equity']
+        ].forEach(([stateKey, color, lineWidth, title]) => {
+            bridgeFireState[stateKey] = window.addChartSeries(chart, 'line', {
+                color,
+                lineWidth,
+                priceLineVisible: false,
+                lastValueVisible: true,
+                title
+            });
         });
 
         if (window.ResizeObserver) {
             bridgeFireState.resizeObserver = new ResizeObserver(() => {
                 chart.resize(chartElement.clientWidth, chartElement.clientHeight);
-                if (bridgeFireState.lastResult) {
-                    scheduleBridgeEventLineRender(bridgeFireState.lastResult);
-                }
+                scheduleCurrentBridgeEventLineRender();
             });
             bridgeFireState.resizeObserver.observe(chartElement);
         }
 
         const timeScale = chart.timeScale();
-        if (timeScale.subscribeVisibleTimeRangeChange) {
-            timeScale.subscribeVisibleTimeRangeChange(() => {
-                if (bridgeFireState.lastResult) {
-                    scheduleBridgeEventLineRender(bridgeFireState.lastResult);
-                }
-            });
-        }
-        if (timeScale.subscribeVisibleLogicalRangeChange) {
-            timeScale.subscribeVisibleLogicalRangeChange(() => {
-                if (bridgeFireState.lastResult) {
-                    scheduleBridgeEventLineRender(bridgeFireState.lastResult);
-                }
-            });
-        }
+        ['subscribeVisibleTimeRangeChange', 'subscribeVisibleLogicalRangeChange'].forEach((method) => {
+            timeScale[method]?.(scheduleCurrentBridgeEventLineRender);
+        });
     }
 
-    function addBridgeSeries(chart, type, options) {
-        const LightweightCharts = window.LightweightCharts;
-        const constructors = {
-            line: LightweightCharts.LineSeries
-        };
-        if (chart.addSeries && constructors[type]) {
-            return chart.addSeries(constructors[type], options);
+    function toBridgeSeriesData(records, key) {
+        return records.map((record) => ({
+            time: toChartTime(record.date),
+            value: roundCents(record[key])
+        }));
+    }
+
+    function scheduleCurrentBridgeEventLineRender() {
+        if (bridgeFireState.lastResult) {
+            scheduleBridgeEventLineRender(bridgeFireState.lastResult);
         }
-        if (type === 'line' && chart.addLineSeries) {
-            return chart.addLineSeries(options);
-        }
-        throw new Error('Line series unavailable');
     }
 
     function addBridgeChartMarkers(result) {
@@ -1028,7 +940,7 @@
                 return;
             }
             const marker = document.createElement('div');
-            marker.className = `bridge-event-line ${event.className}`;
+            marker.className = 'bridge-event-line';
             marker.title = event.label;
             marker.style.left = `${Math.round(x)}px`;
 
@@ -1047,13 +959,11 @@
         const events = [
             {
                 date: result.fireMonth,
-                label: 'FIRE',
-                className: 'is-fire'
+                label: 'FIRE'
             },
             {
                 date: result.inheritanceMonth,
-                label: 'Inheritance',
-                className: 'is-inheritance'
+                label: 'Inheritance'
             }
         ];
         const saleMonth = result.fireMonth
@@ -1062,16 +972,14 @@
         if (saleMonth) {
             events.push({
                 date: saleMonth,
-                label: 'Apartment sold',
-                className: 'is-apartment-sale'
+                label: 'Apartment sold'
             });
         }
         const payoffMonth = firstOfMonth(loan.payoffDate);
         if ((!saleMonth || saleMonth > payoffMonth) && payoffMonth >= result.todayMonth) {
             events.push({
                 date: payoffMonth,
-                label: 'Rent starts',
-                className: 'is-rent-start'
+                label: 'Rent starts'
             });
         }
         return dedupeBridgeEvents(events);
@@ -1213,10 +1121,6 @@
             && parsed.getFullYear() === year
             && parsed.getMonth() === month - 1
             && parsed.getDate() === day;
-    }
-
-    function clampReturnPercent(value) {
-        return clamp(value, -99.9, 100);
     }
 
     function clampMonth(date, minDate, maxDate) {
