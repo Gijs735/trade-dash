@@ -5,11 +5,29 @@ const dailyChartBars = Math.ceil(chartHistoryMonths * 365.25 / 12);
 const coinbaseDailyCandleLimit = 290;
 const dayInSeconds = 86400;
 const candleCacheTtlMs = 3 * 60 * 60 * 1000;
-const candleCacheKey = `shorty:BTC-EUR:daily-candles:${chartHistoryMonths}m:v1`;
+const candleCacheKey = `bully:BTC-EUR:daily-candles:${chartHistoryMonths}m:v1`;
 const chartUpColor = '#4aa38c';
 const chartDownColor = '#ef5350';
-let sellPrice = 92000; // sell price in EUR
-let currentEurHoldings = 355500; // current EUR holdings
+const tradingViewScanUrl = 'https://scanner.tradingview.com/america/scan';
+const fallbackMstrPriceUsd = 124.80;
+const defaultStrategyMnavInputs = {
+    btcHoldings: 845050,
+    usdAssets: 6710000000,
+    debt: 6754000000,
+    preferred: 14810282300,
+    dilutedShares: 424431421
+};
+const strategyInputsUrl = 'strategy-inputs.json';
+const strategyInputsCacheTtlMs = 15 * 60 * 1000;
+const tradingViewMstrColumns = [
+    'close',
+    'currency',
+    'premarket_close',
+    'postmarket_close'
+];
+let mstrShares = 3332;
+let mstrAveragePriceUsd = 123.70;
+let strategyInputsCache;
 let hasLoadedPriceChart = false;
 let hasPreloadedPriceChart = false;
 let lightweightChartsLoadPromise;
@@ -17,7 +35,6 @@ const priceChartState = {
     chart: null,
     candlestickSeries: null,
     volumeSeries: null,
-    entryPriceLine: null,
     resizeObserver: null,
     timeframe: 'weekly',
     activeCandles: [],
@@ -44,33 +61,200 @@ async function getBTCPriceEUR() {
     }
 }
 
-async function evaluateShortTrade(sellPrice, currentEurHoldings) {
-    const btcPrice = await getBTCPriceEUR();
-    const btcBoughtBack = currentEurHoldings / btcPrice;
-    const btcSold = currentEurHoldings / sellPrice;
-    const btcDelta = btcBoughtBack - btcSold;
+async function getUsdEurRate() {
+    const url = 'https://api.frankfurter.dev/v1/latest?from=USD&to=EUR';
+
+    try {
+        const response = await fetch(url);
+        if (!response.ok) {
+            throw new Error(`Request Failed. Status Code: ${response.status}`);
+        }
+        const json = await response.json();
+        const rate = Number(json?.rates?.EUR);
+        if (!Number.isFinite(rate) || rate <= 0) {
+            throw new Error('USD/EUR rate not found in response');
+        }
+        return rate;
+    } catch (e) {
+        throw new Error('Error fetching or parsing USD/EUR response: ' + e.message);
+    }
+}
+
+async function getMstrPriceUsd() {
+    try {
+        const response = await fetch(tradingViewScanUrl, {
+            method: 'POST',
+            headers: {
+                Accept: 'application/json',
+                'Content-Type': 'text/plain'
+            },
+            body: JSON.stringify({
+                symbols: {
+                    tickers: ['NASDAQ:MSTR'],
+                    query: { types: [] }
+                },
+                columns: tradingViewMstrColumns
+            })
+        });
+        if (!response.ok) {
+            throw new Error(`Request Failed. Status Code: ${response.status}`);
+        }
+
+        const row = (await response.json())?.data?.[0]?.d;
+        const price = Array.isArray(row) ? parseMstrPrice(row) : NaN;
+        if (!Number.isFinite(price) || price <= 0) {
+            throw new Error('MSTR price not found in response');
+        }
+        return price;
+    } catch (err) {
+        console.warn('Live MSTR price unavailable; using fallback price', err);
+        return fallbackMstrPriceUsd;
+    }
+}
+
+function parseMstrPrice(row) {
+    const [closePrice, currency, premarketPrice, postmarketPrice] = row;
+    if (currency && currency !== 'USD') {
+        throw new Error(`Unexpected MSTR quote currency: ${currency}`);
+    }
+
+    const session = getNewYorkMarketSession();
+    const regular = Number(closePrice);
+    const pre = Number(premarketPrice);
+    const post = Number(postmarketPrice);
+    const usePre = session === 'pre-market' && Number.isFinite(pre) && pre > 0;
+    const usePost = ['after-hours', 'overnight'].includes(session) && Number.isFinite(post) && post > 0;
+
+    return usePre ? pre : usePost ? post : regular;
+}
+
+function getNewYorkMarketSession(date = new Date()) {
+    const parts = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'America/New_York',
+        weekday: 'short',
+        hour: '2-digit',
+        minute: '2-digit',
+        hourCycle: 'h23'
+    }).formatToParts(date);
+    const partMap = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+    const weekday = partMap.weekday;
+    const minutes = (Number(partMap.hour) * 60) + Number(partMap.minute);
+    const isWeekday = !['Sat', 'Sun'].includes(weekday);
+
+    if (!isWeekday) {
+        return 'overnight';
+    }
+    if (minutes >= 4 * 60 && minutes < (9 * 60) + 30) {
+        return 'pre-market';
+    }
+    if (minutes >= (9 * 60) + 30 && minutes < 16 * 60) {
+        return 'regular';
+    }
+    if (minutes >= 16 * 60 && minutes < 20 * 60) {
+        return 'after-hours';
+    }
+    return 'overnight';
+}
+
+async function evaluateMstrPosition(shares, averagePriceUsd) {
+    const [btcPriceEur, usdEurRate, mstrPriceUsd, strategyInputs] = await Promise.all([
+        getBTCPriceEUR(),
+        getUsdEurRate(),
+        getMstrPriceUsd(),
+        getStrategyMnavInputs()
+    ]);
+    const mstrPriceEur = mstrPriceUsd * usdEurRate;
+    const positionValueEur = shares * mstrPriceEur;
+    const costBasisEur = shares * averagePriceUsd * usdEurRate;
+    const profitLossEur = positionValueEur - costBasisEur;
+    const profitLossPercent = ((mstrPriceUsd - averagePriceUsd) / averagePriceUsd) * 100;
+    const btcPriceUsd = btcPriceEur / usdEurRate;
+    const { mnav, netBtcPerShare } = calculateStrategyMnav(strategyInputs, mstrPriceUsd, btcPriceUsd);
+    const netBtcExposure = netBtcPerShare * shares;
 
     return {
-        btcBoughtBack,
-        wasSuccessful: btcDelta > 0,
-        btcDelta,
-        btcPrice,
-        profitLossPercent: Number(((btcDelta / btcSold) * 100).toFixed(2))
+        mstrPriceUsd,
+        btcPriceEur,
+        positionValueEur,
+        profitLossEur,
+        profitLossPercent,
+        netBtcPerShare,
+        netBtcExposure,
+        mnav,
+        isProfitable: profitLossEur >= 0
+    };
+}
+
+async function getStrategyMnavInputs() {
+    if (strategyInputsCache && Date.now() - strategyInputsCache.fetchedAt < strategyInputsCacheTtlMs) {
+        return strategyInputsCache.inputs;
+    }
+
+    try {
+        const response = await fetch(strategyInputsUrl, { cache: 'no-store' });
+        if (!response.ok) {
+            throw new Error(`Request Failed. Status Code: ${response.status}`);
+        }
+
+        const inputs = normalizeStrategyInputs(await response.json());
+        strategyInputsCache = {
+            fetchedAt: Date.now(),
+            inputs
+        };
+        return inputs;
+    } catch (err) {
+        console.warn('Strategy filing inputs unavailable; using embedded fallback', err);
+        return defaultStrategyMnavInputs;
+    }
+}
+
+function normalizeStrategyInputs(inputs) {
+    const normalized = {
+        btcHoldings: Number(inputs?.btcHoldings),
+        usdAssets: Number(inputs?.usdAssets),
+        debt: Number(inputs?.debt),
+        preferred: Number(inputs?.preferred),
+        dilutedShares: Number(inputs?.dilutedShares)
+    };
+
+    if (Object.values(normalized).every((value) => Number.isFinite(value) && value > 0)) {
+        return normalized;
+    }
+
+    throw new Error('Strategy filing inputs are incomplete');
+}
+
+function calculateStrategyMnav(strategyMnavInputs, mstrPriceUsd, btcPriceUsd) {
+    const netReserveUsd = (
+        strategyMnavInputs.btcHoldings * btcPriceUsd
+        + strategyMnavInputs.usdAssets
+        - strategyMnavInputs.debt
+        - strategyMnavInputs.preferred
+    );
+    const netReservePerShareUsd = netReserveUsd / strategyMnavInputs.dilutedShares;
+
+    return {
+        netBtcPerShare: netReservePerShareUsd / btcPriceUsd,
+        mnav: mstrPriceUsd / netReservePerShareUsd
     };
 }
 
 async function updateTradeInfo() {
     try {
-        syncCurrentEurHoldingsFromInput();
-        syncSellPriceFromInput();
-        const result = await evaluateShortTrade(sellPrice, currentEurHoldings);
-        const color = result.wasSuccessful ? '#22c55e' : '#ef4444';
-        const plusminus = result.wasSuccessful ? '+' : '';
+        syncMstrSharesFromInput();
+        syncMstrAveragePriceFromInput();
+        const result = await evaluateMstrPosition(mstrShares, mstrAveragePriceUsd);
+        const color = result.isProfitable ? '#22c55e' : '#ef4444';
+        const plusminus = result.isProfitable ? '+' : '';
         const metricText = {
-            delta: plusminus + result.btcDelta.toFixed(4),
-            total: '₿ ' + result.btcBoughtBack.toFixed(4),
-            currentPrice: '€ ' + result.btcPrice,
-            percent: plusminus + result.profitLossPercent + '%'
+            total: formatEur(result.positionValueEur, 0),
+            currentPrice: `$${formatNumber(result.mstrPriceUsd, 2)}`,
+            delta: formatSats(result.netBtcPerShare),
+            percent: plusminus + result.profitLossPercent.toFixed(2) + '%'
+        };
+        const metricDetails = {
+            delta: `${formatBtc(result.netBtcExposure, 4)} net BTC exposure · ${result.mnav.toFixed(2)}x current mNAV`,
+            percent: `${formatSignedEur(result.profitLossEur, 0)} vs entry`
         };
 
         Object.entries(metricText).forEach(([id, text]) => {
@@ -78,26 +262,36 @@ async function updateTradeInfo() {
             element.textContent = text;
             element.style.color = color;
         });
-        updateLiveChartPrice(result.btcPrice);
+        Object.entries(metricDetails).forEach(([id, text]) => {
+            const element = document.getElementById(`${id}Detail`);
+            if (element) {
+                element.textContent = text;
+            }
+        });
+        updateLiveChartPrice(result.btcPriceEur);
 
         return result;
     } catch (err) {
         ['delta', 'total', 'currentPrice', 'percent'].forEach((id) => {
             document.getElementById(id).textContent = 'Error';
+            const detail = document.getElementById(`${id}Detail`);
+            if (detail) {
+                detail.textContent = '';
+            }
         });
         console.error(err);
         return null;
     }
 }
 
-function syncCurrentEurHoldingsFromInput() {
-    currentEurHoldings = readPositiveInput('currentEurHoldings', currentEurHoldings);
-    return currentEurHoldings;
+function syncMstrSharesFromInput() {
+    mstrShares = readPositiveInput('mstrShares', mstrShares);
+    return mstrShares;
 }
 
-function syncSellPriceFromInput() {
-    sellPrice = readPositiveInput('shortEntryPrice', sellPrice);
-    return sellPrice;
+function syncMstrAveragePriceFromInput() {
+    mstrAveragePriceUsd = readPositiveInput('mstrAveragePrice', mstrAveragePriceUsd);
+    return mstrAveragePriceUsd;
 }
 
 function readPositiveInput(id, fallback) {
@@ -111,28 +305,35 @@ function readPositiveInput(id, fallback) {
     return Number.isFinite(number) && number > 0 ? number : fallback;
 }
 
-function setupHoldingsInput(onChange) {
-    setupNumberInput('currentEurHoldings', currentEurHoldings, syncCurrentEurHoldingsFromInput, onChange);
+function setupMstrSharesInput(onChange) {
+    setupNumberInput('mstrShares', mstrShares, syncMstrSharesFromInput, onChange, formatShareInputValue);
 }
 
-function setupShortEntryInput(onChange) {
-    setupNumberInput('shortEntryPrice', sellPrice, syncSellPriceFromInput, onChange, updateEntryPriceLine);
+function setupMstrAveragePriceInput(onChange) {
+    setupNumberInput('mstrAveragePrice', mstrAveragePriceUsd, syncMstrAveragePriceFromInput, onChange, formatPriceInputValue);
 }
 
-function setupNumberInput(id, initialValue, syncValue, onChange, afterSync) {
+function setupNumberInput(id, initialValue, syncValue, onChange, formatValue = String) {
     const input = document.getElementById(id);
     if (!input) {
         return;
     }
 
     let debounceId;
-    input.value = String(Math.round(initialValue));
+    input.value = formatValue(initialValue);
     input.addEventListener('input', () => {
         syncValue();
-        afterSync?.();
         window.clearTimeout(debounceId);
         debounceId = window.setTimeout(onChange, 350);
     });
+}
+
+function formatShareInputValue(value) {
+    return String(Math.round(value));
+}
+
+function formatPriceInputValue(value) {
+    return Number(value).toFixed(2);
 }
 
 function setupPriceChart() {
@@ -548,7 +749,6 @@ function renderActiveChartData({ resetRange = false } = {}) {
     priceChartState.candlestickSeries.setData(candles.map(toCandlestickData));
     priceChartState.volumeSeries.setData(candles.map(toVolumeData));
     updateCurrentPriceLineColor();
-    updateEntryPriceLine();
     if (resetRange) {
         setVisibleChartRange();
     }
@@ -636,27 +836,6 @@ function getCandleMove(candles) {
         change,
         percentChange
     };
-}
-
-function updateEntryPriceLine() {
-    const { candlestickSeries } = priceChartState;
-    if (!candlestickSeries) {
-        return;
-    }
-
-    if (priceChartState.entryPriceLine) {
-        candlestickSeries.removePriceLine(priceChartState.entryPriceLine);
-    }
-
-    const dottedLineStyle = window.LightweightCharts?.LineStyle?.Dotted ?? 1;
-    priceChartState.entryPriceLine = candlestickSeries.createPriceLine({
-        price: sellPrice,
-        color: '#ef5350',
-        lineWidth: 1,
-        lineStyle: dottedLineStyle,
-        axisLabelVisible: true,
-        title: 'Short entry'
-    });
 }
 
 function updateLiveChartPrice(price) {
@@ -765,6 +944,30 @@ function formatChartPrice(price) {
     return Number(price).toLocaleString('en-US', {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2
+    });
+}
+
+function formatEur(value, digits = 2) {
+    return `€ ${formatNumber(value, digits)}`;
+}
+
+function formatSignedEur(value, digits = 2) {
+    const sign = value >= 0 ? '+' : '-';
+    return `${sign}${formatEur(Math.abs(value), digits)}`;
+}
+
+function formatBtc(value, digits = 4) {
+    return `₿ ${formatNumber(value, digits)}`;
+}
+
+function formatSats(btcValue) {
+    return formatNumber(btcValue * 100000000, 0);
+}
+
+function formatNumber(value, digits = 0) {
+    return Number(value).toLocaleString('en-US', {
+        minimumFractionDigits: digits,
+        maximumFractionDigits: digits
     });
 }
 

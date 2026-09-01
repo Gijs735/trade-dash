@@ -5,6 +5,8 @@ on:
     branches:
       - main
   workflow_dispatch:
+  schedule:
+    - cron: '45 13 * * 1-5'
 
 permissions:
   contents: read
@@ -26,6 +28,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Refresh Strategy filing inputs
+        env:
+          SEC_USER_AGENT: trade-dash strategy-updater https://github.com/${{ github.repository }}
+        run: node scripts/update-strategy-inputs.mjs
+
       - name: Prepare site files
         run: |
           mkdir -p _site
@@ -33,6 +40,7 @@ jobs:
             --exclude '.git/' \
             --exclude '.github/' \
             --exclude '_site/' \
+            --exclude 'scripts/' \
             --exclude 'LICENSE' \
             --exclude 'README.md' \
             ./ _site/
