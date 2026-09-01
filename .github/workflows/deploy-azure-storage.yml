@@ -30,7 +30,7 @@ jobs:
 
       - name: Refresh Strategy filing inputs
         env:
-          SEC_USER_AGENT: trade-dash strategy-updater https://github.com/${{ github.repository }}
+          SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT || vars.SEC_USER_AGENT }}
         run: node scripts/update-strategy-inputs.mjs
 
       - name: Prepare site files

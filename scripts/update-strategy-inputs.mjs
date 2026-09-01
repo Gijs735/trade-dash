@@ -5,7 +5,12 @@ import { dirname, resolve } from 'node:path';
 const cik = '0001050446';
 const cikPath = '1050446';
 const submissionsUrl = `https://data.sec.gov/submissions/CIK${cik}.json`;
-const userAgent = process.env.SEC_USER_AGENT || 'trade-dash strategy-updater local';
+const atomFeedUrl = `https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=${cik}&type=8-K&owner=exclude&count=40&output=atom`;
+const declaredUserAgent = process.env.SEC_USER_AGENT || 'trade-dash strategy-updater local';
+const chromeUserAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36';
+const userAgent = declaredUserAgent.includes('Chrome/')
+    ? declaredUserAgent
+    : `${chromeUserAgent} ${declaredUserAgent}`;
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const inputsPath = resolve(rootDir, 'strategy-inputs.json');
 const million = 1000000;
@@ -13,6 +18,7 @@ const billion = 1000000000;
 const dryRun = process.argv.includes('--dry-run');
 
 async function main() {
+    validateUserAgent();
     const current = await readCurrentInputs();
     const filings = await getCandidateFilings(current);
     let next = current;
@@ -58,14 +64,57 @@ async function getCandidateFilings(current) {
         }];
     }
 
+    const filings = await fetchAtomFilings().catch(async (atomError) => {
+        console.warn(`SEC Atom feed unavailable; trying submissions API fallback. ${atomError.message}`);
+        return fetchSubmissionsFilings();
+    });
+
+    const appliedFilings = new Set(current.appliedFilings || []);
+    const currentFilingDate = current.source?.filingDate || '0000-00-00';
+    return filings
+        .filter((filing) => filing.form === '8-K')
+        .filter((filing) => filing.filingDate >= currentFilingDate)
+        .filter((filing) => !appliedFilings.has(filing.accessionNumber))
+        .sort((a, b) => (
+            a.filingDate.localeCompare(b.filingDate)
+            || a.accessionNumber.localeCompare(b.accessionNumber)
+        ));
+}
+
+async function fetchAtomFilings() {
+    const atom = await fetchText(atomFeedUrl, 'application/atom+xml');
+    return [...atom.matchAll(/<entry>([\s\S]*?)<\/entry>/g)]
+        .map(([, entry]) => ({
+            accessionNumber: tagText(entry, 'accession-number'),
+            filingDate: tagText(entry, 'filing-date'),
+            reportDate: '',
+            form: tagText(entry, 'filing-type'),
+            indexUrl: decodeXml(tagText(entry, 'filing-href'))
+        }))
+        .filter((filing) => filing.accessionNumber && filing.filingDate && filing.indexUrl)
+        .map((filing) => ({
+            ...filing,
+            url: filingDocumentUrl(filing.indexUrl)
+        }));
+}
+
+function filingDocumentUrl(indexUrl) {
+    const accessionPath = indexUrl.match(/\/Archives\/edgar\/data\/\d+\/\d+\//)?.[0];
+    const accessionNumber = indexUrl.match(/(\d{10}-\d{2}-\d{6})-index\.htm/)?.[1];
+    if (!accessionPath || !accessionNumber) {
+        throw new Error(`Could not derive filing document URL from ${indexUrl}`);
+    }
+
+    return `https://www.sec.gov${accessionPath}${accessionNumber}.txt`;
+}
+
+async function fetchSubmissionsFilings() {
     const submissions = await fetchJson(submissionsUrl);
     const recent = submissions?.filings?.recent;
     if (!recent) {
         throw new Error('SEC submissions response did not include recent filings.');
     }
 
-    const appliedFilings = new Set(current.appliedFilings || []);
-    const currentFilingDate = current.source?.filingDate || '0000-00-00';
     return recent.accessionNumber
         .map((accessionNumber, index) => ({
             accessionNumber,
@@ -74,13 +123,6 @@ async function getCandidateFilings(current) {
             form: recent.form[index],
             primaryDocument: recent.primaryDocument[index]
         }))
-        .filter((filing) => filing.form === '8-K')
-        .filter((filing) => filing.filingDate >= currentFilingDate)
-        .filter((filing) => !appliedFilings.has(filing.accessionNumber))
-        .sort((a, b) => (
-            a.filingDate.localeCompare(b.filingDate)
-            || a.accessionNumber.localeCompare(b.accessionNumber)
-        ))
         .map((filing) => ({
             ...filing,
             url: archiveUrl(filing)
@@ -100,8 +142,8 @@ async function fetchJson(url) {
     return response.json();
 }
 
-async function fetchText(url) {
-    const response = await fetch(url, { headers: secHeaders('text/html') });
+async function fetchText(url, accept = 'text/html') {
+    const response = await fetch(url, { headers: secHeaders(accept) });
     if (!response.ok) {
         throw new Error(`SEC filing request failed ${response.status}: ${url}`);
     }
@@ -111,9 +153,34 @@ async function fetchText(url) {
 function secHeaders(accept) {
     return {
         'User-Agent': userAgent,
-        'Accept-Encoding': 'gzip, deflate',
+        'Accept-Encoding': 'gzip, deflate, br',
         Accept: accept
     };
+}
+
+function validateUserAgent() {
+    const hasEmailContact = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i.test(declaredUserAgent);
+    const usesGithubNoreply = /@users\.noreply\.github\.com/i.test(declaredUserAgent);
+
+    if (process.env.GITHUB_ACTIONS && (!hasEmailContact || usesGithubNoreply)) {
+        throw new Error(
+            'Set a SEC_USER_AGENT repository secret or variable with a real contact email, '
+            + 'for example: trade-dash FinestBit you@example.com'
+        );
+    }
+}
+
+function tagText(xml, tagName) {
+    return decodeXml(xml.match(new RegExp(`<${tagName}>([\\s\\S]*?)<\\/${tagName}>`))?.[1] || '').trim();
+}
+
+function decodeXml(value) {
+    return value
+        .replaceAll('&amp;', '&')
+        .replaceAll('&lt;', '<')
+        .replaceAll('&gt;', '>')
+        .replaceAll('&quot;', '"')
+        .replaceAll('&apos;', "'");
 }
 
 function parseStrategyFiling(html) {

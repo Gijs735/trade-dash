@@ -15,8 +15,11 @@ To refresh the local filing inputs without deploying:
 node scripts/update-strategy-inputs.mjs
 ```
 
-Set `SEC_USER_AGENT` if you want the SEC requests to identify a specific
-contact.
+Set the `SEC_USER_AGENT` repository secret or variable to identify a specific
+contact for SEC requests. This is required in GitHub Actions. SEC recommends a
+declared User-Agent with contact information, for example
+`trade-dash company you@example.com`. The updater automatically sends that
+contact string with a Chrome-style browser User-Agent prefix.
 
 Configure these repository secrets:
 
