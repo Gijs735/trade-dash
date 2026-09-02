@@ -7,7 +7,9 @@ The GitHub Actions workflow in `.github/workflows/deploy-azure-storage.yml`
 deploys the static website to Azure Blob Storage on every push to `main`, and
 can also be started manually from the Actions tab. It also runs on weekday
 schedule and refreshes `strategy-inputs.json` from Strategy's latest SEC 8-K
-before uploading the static files.
+before uploading the static files. When the filing inputs change, the workflow
+commits the refreshed `strategy-inputs.json` back to `main` so future runs start
+from the latest saved state.
 
 To refresh the local filing inputs without deploying:
 

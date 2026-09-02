@@ -3,9 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 
 const cik = '0001050446';
-const cikPath = '1050446';
-const submissionsUrl = `https://data.sec.gov/submissions/CIK${cik}.json`;
-const atomFeedUrl = `https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=${cik}&type=8-K&owner=exclude&count=40&output=atom`;
+const atomFeedUrl = `https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=${cik}&type=8-K&owner=exclude&count=100&output=atom`;
 const declaredUserAgent = process.env.SEC_USER_AGENT || 'trade-dash strategy-updater local';
 const chromeUserAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36';
 const userAgent = declaredUserAgent.includes('Chrome/')
@@ -64,14 +62,9 @@ async function getCandidateFilings(current) {
         }];
     }
 
-    const filings = await fetchAtomFilings().catch(async (atomError) => {
-        console.warn(`SEC Atom feed unavailable; trying submissions API fallback. ${atomError.message}`);
-        return fetchSubmissionsFilings();
-    });
-
     const appliedFilings = new Set(current.appliedFilings || []);
     const currentFilingDate = current.source?.filingDate || '0000-00-00';
-    return filings
+    return (await fetchAtomFilings())
         .filter((filing) => filing.form === '8-K')
         .filter((filing) => filing.filingDate >= currentFilingDate)
         .filter((filing) => !appliedFilings.has(filing.accessionNumber))
@@ -106,40 +99,6 @@ function filingDocumentUrl(indexUrl) {
     }
 
     return `https://www.sec.gov${accessionPath}${accessionNumber}.txt`;
-}
-
-async function fetchSubmissionsFilings() {
-    const submissions = await fetchJson(submissionsUrl);
-    const recent = submissions?.filings?.recent;
-    if (!recent) {
-        throw new Error('SEC submissions response did not include recent filings.');
-    }
-
-    return recent.accessionNumber
-        .map((accessionNumber, index) => ({
-            accessionNumber,
-            filingDate: recent.filingDate[index],
-            reportDate: recent.reportDate[index],
-            form: recent.form[index],
-            primaryDocument: recent.primaryDocument[index]
-        }))
-        .map((filing) => ({
-            ...filing,
-            url: archiveUrl(filing)
-        }));
-}
-
-function archiveUrl(filing) {
-    const accessionPath = filing.accessionNumber.replaceAll('-', '');
-    return `https://www.sec.gov/Archives/edgar/data/${cikPath}/${accessionPath}/${filing.primaryDocument}`;
-}
-
-async function fetchJson(url) {
-    const response = await fetch(url, { headers: secHeaders('application/json') });
-    if (!response.ok) {
-        throw new Error(`SEC request failed ${response.status}: ${url}`);
-    }
-    return response.json();
 }
 
 async function fetchText(url, accept = 'text/html') {

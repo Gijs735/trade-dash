@@ -306,11 +306,11 @@ function readPositiveInput(id, fallback) {
 }
 
 function setupMstrSharesInput(onChange) {
-    setupNumberInput('mstrShares', mstrShares, syncMstrSharesFromInput, onChange, formatShareInputValue);
+    setupNumberInput('mstrShares', mstrShares, syncMstrSharesFromInput, onChange, Math.round);
 }
 
 function setupMstrAveragePriceInput(onChange) {
-    setupNumberInput('mstrAveragePrice', mstrAveragePriceUsd, syncMstrAveragePriceFromInput, onChange, formatPriceInputValue);
+    setupNumberInput('mstrAveragePrice', mstrAveragePriceUsd, syncMstrAveragePriceFromInput, onChange, (value) => Number(value).toFixed(2));
 }
 
 function setupNumberInput(id, initialValue, syncValue, onChange, formatValue = String) {
@@ -326,14 +326,6 @@ function setupNumberInput(id, initialValue, syncValue, onChange, formatValue = S
         window.clearTimeout(debounceId);
         debounceId = window.setTimeout(onChange, 350);
     });
-}
-
-function formatShareInputValue(value) {
-    return String(Math.round(value));
-}
-
-function formatPriceInputValue(value) {
-    return Number(value).toFixed(2);
 }
 
 function setupPriceChart() {

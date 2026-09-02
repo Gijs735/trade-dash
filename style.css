@@ -169,8 +169,6 @@ h1 {
 }
 
 .box .metric-note {
-    max-width: 100%;
-    color: var(--muted);
     font-size: 0.86rem;
     font-weight: 700;
 }
