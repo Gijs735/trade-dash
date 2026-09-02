@@ -51,7 +51,7 @@
     >
     <header class="dashboard-header">
         <div>
-            <p class="eyebrow">Live BTC/EUR dashboard</p>
+            <p class="eyebrow">Live MSTR dashboard</p>
             <h1>MSTR position</h1>
         </div>
         <p id="timer"></p>
@@ -78,10 +78,10 @@
         </div>
     </section>
 
-    <section class="chart-disclosure" aria-label="BTC/EUR chart">
+    <section class="chart-disclosure" aria-label="BTC/USD chart">
         <details id="priceChartPanel" class="chart-panel">
             <summary class="chart-tab">
-                <span class="chart-tab-title">BTC/EUR chart</span>
+                <span class="chart-tab-title">BTC/USD chart</span>
                 <a
                     class="chart-tab-source"
                     href="https://tradingview.github.io/lightweight-charts/docs"
@@ -93,21 +93,21 @@
             </summary>
             <div class="chart-body">
                 <div
-                    id="btcEurChart"
+                    id="btcUsdChart"
                     class="price-chart-frame"
-                    aria-label="BTC/EUR price chart"
+                    aria-label="BTC/USD price chart"
                 >
                     <div class="price-chart-toolbar" aria-label="Chart timeframe controls">
                         <button class="chart-period-button" type="button" data-chart-period="daily">Daily</button>
                         <button class="chart-period-button is-active" type="button" data-chart-period="weekly">Weekly</button>
                         <span class="price-chart-meta">24M history</span>
-                        <span>Live BTC/EUR</span>
+                        <span>Live BTC/USD</span>
                         <span id="chartMoveIndicator" class="chart-move-indicator" aria-live="polite">--</span>
                     </div>
                     <div class="price-chart-heading">
                         <p>
                             <span class="coin-dot">₿</span>
-                            <span>Bitcoin / Euro · <span id="chartTimeframeLabel">1W</span> · Coinbase</span>
+                            <span>Bitcoin / US Dollar · <span id="chartTimeframeLabel">1W</span> · Coinbase</span>
                         </p>
                         <p id="chartOhlc" class="chart-ohlc"></p>
                     </div>
@@ -408,7 +408,7 @@
     </section>
 </main>
 
-<script src="btc.js?v=27"></script>
+<script src="btc.js?v=28"></script>
 <script src="bridge-fire.js?v=19"></script>
 <script>
 const refreshIntervalMs = 10000;

@@ -5,7 +5,8 @@ const dailyChartBars = Math.ceil(chartHistoryMonths * 365.25 / 12);
 const coinbaseDailyCandleLimit = 290;
 const dayInSeconds = 86400;
 const candleCacheTtlMs = 3 * 60 * 60 * 1000;
-const candleCacheKey = `bully:BTC-EUR:daily-candles:${chartHistoryMonths}m:v1`;
+const candleCacheKey = `bully:BTC-USD:daily-candles:${chartHistoryMonths}m:v1`;
+const legacyCandleCacheKeys = [`bully:BTC-EUR:daily-candles:${chartHistoryMonths}m:v1`];
 const chartUpColor = '#4aa38c';
 const chartDownColor = '#ef5350';
 const tradingViewScanUrl = 'https://scanner.tradingview.com/america/scan';
@@ -42,8 +43,8 @@ const priceChartState = {
     weeklyCandles: []
 };
 
-async function getBTCPriceEUR() {
-    const url = 'https://api.coinbase.com/v2/prices/BTC-EUR/spot';
+async function getBTCPriceUSD() {
+    const url = 'https://api.coinbase.com/v2/prices/BTC-USD/spot';
 
     try {
         const response = await fetch(url);
@@ -53,11 +54,11 @@ async function getBTCPriceEUR() {
         const json = await response.json();
         const price = Number(json?.data?.amount);
         if (!Number.isFinite(price) || price <= 0) {
-            throw new Error('BTC price not found in response');
+            throw new Error('BTC/USD price not found in response');
         }
-        return Math.round(price);
+        return price;
     } catch (e) {
-        throw new Error('Error fetching or parsing response: ' + e.message);
+        throw new Error('Error fetching or parsing BTC/USD response: ' + e.message);
     }
 }
 
@@ -157,8 +158,8 @@ function getNewYorkMarketSession(date = new Date()) {
 }
 
 async function evaluateMstrPosition(shares, averagePriceUsd) {
-    const [btcPriceEur, usdEurRate, mstrPriceUsd, strategyInputs] = await Promise.all([
-        getBTCPriceEUR(),
+    const [btcPriceUsd, usdEurRate, mstrPriceUsd, strategyInputs] = await Promise.all([
+        getBTCPriceUSD(),
         getUsdEurRate(),
         getMstrPriceUsd(),
         getStrategyMnavInputs()
@@ -168,13 +169,12 @@ async function evaluateMstrPosition(shares, averagePriceUsd) {
     const costBasisEur = shares * averagePriceUsd * usdEurRate;
     const profitLossEur = positionValueEur - costBasisEur;
     const profitLossPercent = ((mstrPriceUsd - averagePriceUsd) / averagePriceUsd) * 100;
-    const btcPriceUsd = btcPriceEur / usdEurRate;
     const { mnav, netBtcPerShare } = calculateStrategyMnav(strategyInputs, mstrPriceUsd, btcPriceUsd);
     const netBtcExposure = netBtcPerShare * shares;
 
     return {
         mstrPriceUsd,
-        btcPriceEur,
+        btcPriceUsd,
         positionValueEur,
         profitLossEur,
         profitLossPercent,
@@ -268,7 +268,7 @@ async function updateTradeInfo() {
                 element.textContent = text;
             }
         });
-        updateLiveChartPrice(result.btcPriceEur);
+        updateLiveChartPrice(result.btcPriceUsd);
 
         return result;
     } catch (err) {
@@ -367,7 +367,7 @@ function schedulePriceChartPreload() {
     const preload = () => {
         addResourceHint('preconnect', 'https://api.exchange.coinbase.com');
         addResourceHint('preload', lightweightChartsScriptUrl, 'script');
-        document.getElementById('btcEurChart')?.classList.add('is-warmed');
+        document.getElementById('btcUsdChart')?.classList.add('is-warmed');
     };
 
     if ('requestIdleCallback' in window) {
@@ -394,7 +394,7 @@ function addResourceHint(rel, href, as) {
 }
 
 async function loadPriceChart() {
-    const chartHost = document.getElementById('btcEurChart');
+    const chartHost = document.getElementById('btcUsdChart');
     if (hasLoadedPriceChart || !chartHost) {
         return;
     }
@@ -408,7 +408,7 @@ async function loadPriceChart() {
         const weeklyCandles = aggregateDailyCandlesToWeeks(dailyCandles);
         initializePriceChart(dailyCandles, weeklyCandles);
         try {
-            updateLiveChartPrice(await getBTCPriceEUR());
+            updateLiveChartPrice(await getBTCPriceUSD());
         } catch (err) {
             console.warn('Live chart price unavailable', err);
         }
@@ -487,6 +487,7 @@ function createDarkChart(chartElement, options) {
 }
 
 async function fetchCoinbaseDailyCandles() {
+    clearLegacyCandleCaches();
     const cachedCandles = getCachedDailyCandles();
     if (cachedCandles) {
         return cachedCandles;
@@ -564,6 +565,10 @@ function cacheDailyCandles(candles) {
     }
 }
 
+function clearLegacyCandleCaches() {
+    legacyCandleCacheKeys.forEach((key) => localStorage.removeItem(key));
+}
+
 function isValidDailyCandle(candle) {
     return candle
         && Number.isFinite(candle.time)
@@ -580,7 +585,7 @@ async function fetchCoinbaseDailyCandleChunk(start, end) {
         start: start.toISOString(),
         end: end.toISOString()
     });
-    const url = `https://api.exchange.coinbase.com/products/BTC-EUR/candles?${params}`;
+    const url = `https://api.exchange.coinbase.com/products/BTC-USD/candles?${params}`;
     const response = await fetch(url);
     if (!response.ok) {
         throw new Error(`Chart candles request failed. Status Code: ${response.status}`);
