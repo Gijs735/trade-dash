@@ -26,7 +26,7 @@ const tradingViewMstrColumns = [
     'premarket_close',
     'postmarket_close'
 ];
-let mstrShares = 3332;
+let mstrShares = 3333;
 let mstrAveragePriceUsd = 123.70;
 let strategyInputsCache;
 let hasLoadedPriceChart = false;
