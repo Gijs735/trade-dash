@@ -11,13 +11,6 @@ const chartUpColor = '#4aa38c';
 const chartDownColor = '#ef5350';
 const tradingViewScanUrl = 'https://scanner.tradingview.com/america/scan';
 const fallbackMstrPriceUsd = 124.80;
-const defaultStrategyMnavInputs = {
-    btcHoldings: 845050,
-    usdAssets: 6710000000,
-    debt: 6754000000,
-    preferred: 14810282300,
-    dilutedShares: 424431421
-};
 const strategyInputsUrl = 'strategy-inputs.json';
 const strategyInputsCacheTtlMs = 15 * 60 * 1000;
 const tradingViewMstrColumns = [
@@ -169,8 +162,10 @@ async function evaluateMstrPosition(shares, averagePriceUsd) {
     const costBasisEur = shares * averagePriceUsd * usdEurRate;
     const profitLossEur = positionValueEur - costBasisEur;
     const profitLossPercent = ((mstrPriceUsd - averagePriceUsd) / averagePriceUsd) * 100;
-    const { mnav, netBtcPerShare } = calculateStrategyMnav(strategyInputs, mstrPriceUsd, btcPriceUsd);
-    const netBtcExposure = netBtcPerShare * shares;
+    const { mnav, netBtcPerShare } = strategyInputs
+        ? calculateStrategyMnav(strategyInputs, mstrPriceUsd, btcPriceUsd)
+        : { mnav: null, netBtcPerShare: null };
+    const netBtcExposure = netBtcPerShare === null ? null : netBtcPerShare * shares;
 
     return {
         mstrPriceUsd,
@@ -203,8 +198,8 @@ async function getStrategyMnavInputs() {
         };
         return inputs;
     } catch (err) {
-        console.warn('Strategy filing inputs unavailable; using embedded fallback', err);
-        return defaultStrategyMnavInputs;
+        console.warn('Strategy filing inputs unavailable', err);
+        return strategyInputsCache?.inputs ?? null;
     }
 }
 
@@ -217,7 +212,8 @@ function normalizeStrategyInputs(inputs) {
         dilutedShares: Number(inputs?.dilutedShares)
     };
 
-    if (Object.values(normalized).every((value) => Number.isFinite(value) && value > 0)) {
+    if (Object.entries(normalized).every(([key, value]) => inputs?.[key] != null && Number.isFinite(value) && value >= 0)
+        && normalized.btcHoldings > 0 && normalized.dilutedShares > 0) {
         return normalized;
     }
 
@@ -249,11 +245,11 @@ async function updateTradeInfo() {
         const metricText = {
             total: formatEur(result.positionValueEur, 0),
             currentPrice: `$${formatNumber(result.mstrPriceUsd, 2)}`,
-            delta: formatSats(result.netBtcPerShare),
+            delta: result.netBtcPerShare === null ? 'N/A' : formatSats(result.netBtcPerShare),
             percent: plusminus + result.profitLossPercent.toFixed(2) + '%'
         };
         const metricDetails = {
-            delta: `${formatBtc(result.netBtcExposure, 4)} net BTC exposure · ${result.mnav.toFixed(2)}x current mNAV`,
+            delta: result.mnav === null ? '' : `${formatBtc(result.netBtcExposure, 4)} net BTC exposure · ${result.mnav.toFixed(2)}x current mNAV`,
             percent: `${formatSignedEur(result.profitLossEur, 0)} vs entry`
         };
 

@@ -1,17 +1,22 @@
 {
-  "btcHoldings": 845050,
-  "usdAssets": 6710000000,
+  "btcHoldings": 848000,
+  "usdAssets": 5713400000,
   "debt": 6754000000,
-  "preferred": 14810282300,
-  "dilutedShares": 424431421,
+  "preferred": 13979190100,
+  "dilutedShares": 425993480,
   "source": {
-    "accessionNumber": "0001193125-26-375463",
-    "filingDate": "2026-08-31",
-    "reportDate": "2026-08-31",
-    "url": "https://www.sec.gov/Archives/edgar/data/1050446/000119312526375463/mstr-20260831.htm"
+    "accessionNumber": "0001193125-26-413164",
+    "filingDate": "2026-10-05",
+    "reportDate": "2026-10-05",
+    "url": "https://www.sec.gov/Archives/edgar/data/1050446/000119312526413164/0001193125-26-413164.txt"
   },
   "appliedFilings": [
-    "0001193125-26-375463"
+    "0001193125-26-375463",
+    "0001193125-26-384402",
+    "0001193125-26-389858",
+    "0001193125-26-396093",
+    "0001193125-26-403417",
+    "0001193125-26-413164"
   ],
-  "updatedAt": "2026-09-01T00:00:00.000Z"
+  "updatedAt": "2026-10-06T09:17:57.172Z"
 }

@@ -31,7 +31,9 @@ jobs:
       - name: Refresh Strategy filing inputs
         env:
           SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT || vars.SEC_USER_AGENT }}
-        run: node scripts/update-strategy-inputs.mjs
+        run: |
+          node --test scripts/update-strategy-inputs.test.mjs
+          node scripts/update-strategy-inputs.mjs
 
       - name: Persist Strategy filing inputs
         if: github.ref == 'refs/heads/main'

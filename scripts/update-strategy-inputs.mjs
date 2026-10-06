@@ -1,4 +1,6 @@
-import { readFile, writeFile } from 'node:fs/promises';
+import { readFile, writeFile, rename } from 'node:fs/promises';
+import { realpathSync } from 'node:fs';
+import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 
@@ -18,23 +20,33 @@ const dryRun = process.argv.includes('--dry-run');
 async function main() {
     validateUserAgent();
     const current = await readCurrentInputs();
+    validateInputs(current);
     const filings = await getCandidateFilings(current);
     let next = current;
     let applied = 0;
 
     for (const filing of filings) {
-        const html = await fetchText(filing.url);
-        const update = parseStrategyFiling(html);
+        let update;
+        try {
+            await delay(200);
+            update = parseStrategyFiling(await fetchText(filing.url));
+        } catch (error) {
+            throw new Error(`${filing.filingDate} (${filing.url}): ${error.message}`, { cause: error });
+        }
         if (!update) {
             continue;
         }
 
         next = applyFilingUpdate(next, filing, update);
+        console.log(`Parsed ${filing.filingDate}: ${next.btcHoldings} BTC, $${next.usdAssets} USD assets, $${next.preferred} preferred, ${next.dilutedShares} shares.`);
         applied += 1;
     }
 
     if (!applied) {
         console.log(`Strategy inputs already current at ${current.source?.filingDate || 'unknown date'}.`);
+        if (Date.now() - Date.parse(current.source?.filingDate) > 10 * 86400000) {
+            console.warn('::warning::No newer weekly Strategy update parsed; saved inputs are over 10 days old.');
+        }
         return;
     }
 
@@ -43,7 +55,8 @@ async function main() {
         return;
     }
 
-    await writeFile(inputsPath, `${JSON.stringify(next, null, 2)}\n`);
+    await writeFile(`${inputsPath}.tmp`, `${JSON.stringify(next, null, 2)}\n`);
+    await rename(`${inputsPath}.tmp`, inputsPath);
     console.log(`Updated Strategy inputs through ${next.source.filingDate} (${next.source.accessionNumber}).`);
 }
 
@@ -54,9 +67,17 @@ async function readCurrentInputs() {
 async function getCandidateFilings(current) {
     const overrideUrl = getArgValue('--filing-url');
     if (overrideUrl) {
+        const accessionNumber = getArgValue('--accession') || overrideUrl.match(/\d{10}-\d{2}-\d{6}/)?.[0];
+        if (!accessionNumber || !getArgValue('--filing-date')) {
+            throw new Error('--filing-url requires --accession and --filing-date.');
+        }
+        if (current.appliedFilings?.includes(accessionNumber)) return [];
+        if (getArgValue('--filing-date') < current.source.filingDate) {
+            throw new Error('Cannot apply an older filing to the current inputs.');
+        }
         return [{
-            accessionNumber: getArgValue('--accession') || `manual-${Date.now()}`,
-            filingDate: getArgValue('--filing-date') || new Date().toISOString().slice(0, 10),
+            accessionNumber,
+            filingDate: getArgValue('--filing-date'),
             reportDate: getArgValue('--report-date') || '',
             url: overrideUrl
         }];
@@ -64,7 +85,7 @@ async function getCandidateFilings(current) {
 
     const appliedFilings = new Set(current.appliedFilings || []);
     const currentFilingDate = current.source?.filingDate || '0000-00-00';
-    return (await fetchAtomFilings())
+    return (await fetchAtomFilings(currentFilingDate))
         .filter((filing) => filing.form === '8-K')
         .filter((filing) => filing.filingDate >= currentFilingDate)
         .filter((filing) => !appliedFilings.has(filing.accessionNumber))
@@ -74,9 +95,26 @@ async function getCandidateFilings(current) {
         ));
 }
 
-async function fetchAtomFilings() {
-    const atom = await fetchText(atomFeedUrl, 'application/atom+xml');
-    return [...atom.matchAll(/<entry>([\s\S]*?)<\/entry>/g)]
+export async function fetchAtomFilings(since, request = fetchText) {
+    const filings = new Map();
+    for (let start = 0; ; start += 100) {
+        if (start) await delay(200);
+        const atom = await request(`${atomFeedUrl}&start=${start}`, 'application/atom+xml');
+        if (!/<feed\b/i.test(atom)) throw new Error('SEC returned an invalid filing feed.');
+        const entries = parseAtomFilings(atom);
+        if (!entries.length) {
+            throw new Error(`SEC filing history ended before the saved filing date ${since}.`);
+        }
+        const previousSize = filings.size;
+        for (const filing of entries) filings.set(filing.accessionNumber, filing);
+        if (entries.some((filing) => filing.filingDate < since)) break;
+        if (filings.size === previousSize) throw new Error('SEC filing pagination did not advance.');
+    }
+    return [...filings.values()];
+}
+
+function parseAtomFilings(atom) {
+    return [...atom.matchAll(/<entry\b[^>]*>([\s\S]*?)<\/entry>/g)]
         .map(([, entry]) => ({
             accessionNumber: tagText(entry, 'accession-number'),
             filingDate: tagText(entry, 'filing-date'),
@@ -84,11 +122,12 @@ async function fetchAtomFilings() {
             form: tagText(entry, 'filing-type'),
             indexUrl: decodeXml(tagText(entry, 'filing-href'))
         }))
-        .filter((filing) => filing.accessionNumber && filing.filingDate && filing.indexUrl)
-        .map((filing) => ({
-            ...filing,
-            url: filingDocumentUrl(filing.indexUrl)
-        }));
+        .map((filing) => {
+            if (!filing.accessionNumber || !filing.filingDate || !filing.indexUrl || !filing.form) {
+                throw new Error('SEC feed entry is incomplete.');
+            }
+            return { ...filing, url: filingDocumentUrl(filing.indexUrl) };
+        });
 }
 
 function filingDocumentUrl(indexUrl) {
@@ -101,12 +140,26 @@ function filingDocumentUrl(indexUrl) {
     return `https://www.sec.gov${accessionPath}${accessionNumber}.txt`;
 }
 
-async function fetchText(url, accept = 'text/html') {
-    const response = await fetch(url, { headers: secHeaders(accept) });
-    if (!response.ok) {
-        throw new Error(`SEC filing request failed ${response.status}: ${url}`);
+export async function fetchText(url, accept = 'text/html', request = fetch, wait = delay) {
+    for (let attempt = 0; ; attempt += 1) {
+        let response;
+        try {
+            response = await request(url, {
+                headers: secHeaders(accept),
+                signal: AbortSignal.timeout(30000)
+            });
+            if (response.ok) return await response.text();
+            await response.body?.cancel();
+        } catch (error) {
+            if (attempt >= 3) throw new Error(`SEC request failed: ${url}`, { cause: error });
+            response = undefined;
+        }
+        if ((response && ![403, 408, 429, 500, 502, 503, 504].includes(response.status)) || attempt >= 3) {
+            throw new Error(`SEC filing request failed ${response?.status}: ${url}`);
+        }
+        const retryAfter = Number(response?.headers.get('retry-after')) * 1000;
+        await wait(Math.min(30000, Math.max(1000 * 2 ** attempt, retryAfter || 0)));
     }
-    return response.text();
 }
 
 function secHeaders(accept) {
@@ -135,6 +188,11 @@ function tagText(xml, tagName) {
 
 function decodeXml(value) {
     return value
+        .replace(/&#(x[0-9a-f]+|\d+);/gi, (_, code) => String.fromCodePoint(
+            code[0].toLowerCase() === 'x' ? parseInt(code.slice(1), 16) : Number(code)
+        ))
+        .replace(/&nbsp;/gi, ' ')
+        .replace(/&[mn]dash;/gi, '-')
         .replaceAll('&amp;', '&')
         .replaceAll('&lt;', '<')
         .replaceAll('&gt;', '>')
@@ -142,40 +200,51 @@ function decodeXml(value) {
         .replaceAll('&apos;', "'");
 }
 
-function parseStrategyFiling(html) {
+export function parseStrategyFiling(html) {
+    // A complete SEC submission also contains exhibits and duplicate XBRL data.
+    if (/<DOCUMENT>/i.test(html)) {
+        html = html.match(/<DOCUMENT>\s*<TYPE>8-K\s[\s\S]*?<TEXT>([\s\S]*?)<\/TEXT>/i)?.[1];
+        if (!html) throw new Error('Primary 8-K document missing from SEC submission.');
+    }
     const text = htmlToText(html);
-    if (!text.includes('BTC Update') || !text.includes('Aggregate BTC Holdings')) {
+    if (!/BTC Updates?\b|Aggregate BTC Holdings|holds approximately [\d,]+ bitcoin/i.test(text)) {
         return null;
     }
-
-    const btcSection = sliceBetween(text, 'BTC Update', 'Repurchase Program Updates');
-    const cashSection = sliceBetween(text, 'USD Reserve and USD Cash Updates', 'Item 7.01');
-    const atmSection = sliceBetween(text, 'ATM Update', 'BTC Update');
-    const repurchaseSection = sliceBetween(text, 'Repurchase Program Updates', 'USD Reserve and USD Cash Updates');
-
+    const tables = readTables(html);
+    const sales = parseStockActivity(tables, 'Sold');
+    const repurchases = parseStockActivity(tables, 'Repurchased');
+    if (!sales.tables && !/did not sell any shares under its at-the-market offering program/i.test(text)) {
+        throw new Error('ATM activity could not be determined.');
+    }
+    if (!repurchases.tables && !/did not repurchase any shares/i.test(text)) {
+        throw new Error('Share repurchase activity could not be determined.');
+    }
     const update = {
         reportDate: parseReportDate(text),
-        btcHoldings: parseBtcHoldings(btcSection),
-        usdAssets: parseUsdAssets(cashSection),
-        preferredIssuedUsd: parsePreferredIssued(atmSection),
-        preferredRepurchasedUsd: parsePreferredRepurchased(repurchaseSection),
-        mstrSharesSold: parseMstrShares(atmSection),
-        mstrSharesRepurchased: parseMstrShares(repurchaseSection)
+        btcHoldings: parseBtcHoldings(tables, text),
+        usdAssets: parseUsdAssets(text),
+        preferredIssuedUsd: sales.preferred,
+        preferredRepurchasedUsd: repurchases.preferred,
+        mstrSharesSold: sales.mstr,
+        mstrSharesRepurchased: repurchases.mstr
     };
 
     if (!update.btcHoldings) {
         throw new Error('Strategy BTC update found, but aggregate BTC holdings could not be parsed.');
     }
+    if (update.usdAssets === null) throw new Error('USD Reserve and USD Cash balances could not be parsed.');
 
     return update;
 }
 
-function applyFilingUpdate(current, filing, update) {
+export function applyFilingUpdate(current, filing, update) {
+    if (current.appliedFilings?.includes(filing.accessionNumber)) return current;
+    if (filing.filingDate < current.source.filingDate) throw new Error('Cannot apply an older filing.');
     const appliedFilings = [...new Set([...(current.appliedFilings || []), filing.accessionNumber])].slice(-40);
 
-    return {
-        btcHoldings: update.btcHoldings ?? current.btcHoldings,
-        usdAssets: update.usdAssets ?? current.usdAssets,
+    const next = {
+        btcHoldings: update.btcHoldings,
+        usdAssets: update.usdAssets,
         debt: current.debt,
         preferred: current.preferred + update.preferredIssuedUsd - update.preferredRepurchasedUsd,
         dilutedShares: current.dilutedShares + update.mstrSharesSold - update.mstrSharesRepurchased,
@@ -188,41 +257,88 @@ function applyFilingUpdate(current, filing, update) {
         appliedFilings,
         updatedAt: new Date().toISOString()
     };
+    validateInputs(next);
+    return next;
 }
 
-function parseBtcHoldings(section) {
-    const match = section.match(/Average Purchase Price\s+\(2\)\s+([\d,]+)\s+\$\s+[\d,.]+\s+\$\s+[\d,.]+\s+([\d,]+)/);
-    return match ? parseInteger(match[2]) : null;
+function validateInputs(inputs) {
+    for (const key of ['btcHoldings', 'usdAssets', 'debt', 'preferred', 'dilutedShares']) {
+        if (!Number.isFinite(inputs[key]) || inputs[key] < 0) throw new Error(`Invalid ${key} input.`);
+    }
+    if (!Number.isSafeInteger(inputs.btcHoldings) || !Number.isSafeInteger(inputs.dilutedShares)
+        || inputs.btcHoldings === 0 || inputs.dilutedShares === 0) {
+        throw new Error('BTC holdings and diluted shares must be positive integers.');
+    }
+}
+
+function parseBtcHoldings(tables, text) {
+    const snapshots = [];
+    for (const rows of tables) {
+        const headerIndex = rows.findIndex((row) => row.some((cell) => /^Aggregate BTC Holdings$/i.test(cell)));
+        if (headerIndex < 0) continue;
+        const column = rows[headerIndex].findIndex((cell) => /^Aggregate BTC Holdings$/i.test(cell));
+        const values = rows[headerIndex + 1];
+        if (!values || values.length !== rows[headerIndex].length) throw new Error('Unrecognized BTC holdings table.');
+        const date = rows.flat().join(' ').match(/As of ([A-Z][a-z]+ \d{1,2}, \d{4})/i)?.[1];
+        if (!date) throw new Error('BTC holdings table has no snapshot date.');
+        snapshots.push({ date: toIsoDate(date), value: parseNumber(values[column]) });
+    }
+    for (const match of text.matchAll(/As of ([A-Z][a-z]+ \d{1,2}, \d{4}), Strategy holds approximately ([\d,]+) bitcoin/gi)) {
+        snapshots.push({ date: toIsoDate(match[1]), value: parseNumber(match[2]) });
+    }
+    return snapshots.sort((a, b) => a.date.localeCompare(b.date)).at(-1)?.value ?? null;
 }
 
 function parseUsdAssets(section) {
-    const match = section.match(/USD Reserve and USD Cash were\s+\$([\d,.]+)\s+(million|billion)\s+and\s+\$([\d,.]+)\s+(million|billion)/i);
+    const match = [...section.matchAll(/USD Reserve and USD Cash were\s+\$\s*([\d,.]+)\s+(million|billion)\s+and\s+\$\s*([\d,.]+)\s+(million|billion)/gi)].at(-1);
     if (!match) {
         return null;
     }
     return parseScaledNumber(match[1], match[2]) + parseScaledNumber(match[3], match[4]);
 }
 
-function parsePreferredIssued(section) {
-    return sumStockDollars(section, ['STRF', 'STRC', 'STRK', 'STRD'], 1);
+function parseStockActivity(tables, activity) {
+    const total = { tables: 0, preferred: 0, mstr: 0 };
+    for (const rows of tables) {
+        const headerIndex = rows.findIndex((row) => row.includes(`Shares ${activity}`));
+        if (headerIndex < 0) continue;
+        total.tables += 1;
+        const headers = rows[headerIndex];
+        const sharesColumn = headers.indexOf(`Shares ${activity}`);
+        const symbolColumn = headers.indexOf('Security');
+        const symbols = new Set();
+        for (const row of rows.slice(headerIndex + 1)) {
+            const symbol = row[symbolColumn]?.match(/^([A-Z]+) Stock$/)?.[1];
+            if (!symbol) continue;
+            if (symbols.has(symbol) || row.length !== headers.length) throw new Error(`Unrecognized ${symbol} ${activity} row.`);
+            symbols.add(symbol);
+            const shares = parseNumber(row[sharesColumn]);
+            if (!Number.isSafeInteger(shares)) throw new Error(`Invalid ${symbol} share count.`);
+            if (symbol === 'MSTR') total.mstr += shares;
+            else {
+                // Net BTC deducts notional claims, not the cash paid to retire them.
+                if (!['STRF', 'STRC', 'STRK', 'STRD'].includes(symbol) && shares) {
+                    throw new Error(`Unknown preferred notional for ${symbol}.`);
+                }
+                total.preferred += shares * 100;
+            }
+        }
+        for (const symbol of ['MSTR', 'STRF', 'STRC', 'STRK', 'STRD']) {
+            if (!symbols.has(symbol)) throw new Error(`${symbol} missing from ${activity} table.`);
+        }
+    }
+    return total;
 }
 
-function parsePreferredRepurchased(section) {
-    return sumStockDollars(section, ['STRF', 'STRC', 'STRK', 'STRD'], 1);
-}
-
-function parseMstrShares(section) {
-    const match = section.match(/MSTR Stock(?:\s+\(\d+\))?\s+([\d,]+|-)/);
-    return match ? parseInteger(match[1]) : 0;
-}
-
-function sumStockDollars(section, symbols, dollarColumn) {
-    return symbols.reduce((sum, symbol) => {
-        const escapedSymbol = symbol.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const match = section.match(new RegExp(`${escapedSymbol} Stock(?:\\s+\\(\\d+\\))?\\s+[\\d,\\-]+\\s+\\$\\s+([\\d,.\\-]+)(?:\\s+\\$\\s+([\\d,.\\-]+))?`));
-        const value = match ? parseMoneyCell(match[dollarColumn]) : 0;
-        return sum + value;
-    }, 0);
+function readTables(html) {
+    // Ignore layout cells and standalone currency cells so headers align with values.
+    return [...html.matchAll(/<table\b[^>]*>([\s\S]*?)<\/table>/gi)].map(([, table]) => (
+        [...table.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/gi)].map(([, row]) => (
+            [...row.matchAll(/<t[dh]\b[^>]*>([\s\S]*?)<\/t[dh]>/gi)]
+                .map(([, cell]) => htmlToText(cell).replace(/\(\d+\)/g, '').trim())
+                .filter((cell) => cell && cell !== '$')
+        )).filter((row) => row.length)
+    ));
 }
 
 function parseReportDate(text) {
@@ -230,12 +346,11 @@ function parseReportDate(text) {
     return match ? toIsoDate(match[1]) : '';
 }
 
-function parseInteger(value) {
-    return value && value !== '-' ? Number(value.replaceAll(',', '')) : 0;
-}
-
-function parseMoneyCell(value) {
-    return value && value !== '-' ? Number(value.replaceAll(',', '')) * million : 0;
+function parseNumber(value) {
+    const normalized = value?.replace(/^\$\s*/, '').replaceAll(',', '').trim();
+    if (normalized === '-') return 0;
+    if (!/^\d+(?:\.\d+)?$/.test(normalized)) throw new Error(`Invalid numeric cell: ${value}`);
+    return Number(normalized);
 }
 
 function parseScaledNumber(value, scale) {
@@ -243,26 +358,16 @@ function parseScaledNumber(value, scale) {
 }
 
 function htmlToText(html) {
-    return html
+    return decodeXml(html
         .replace(/<script[\s\S]*?<\/script>/gi, '')
         .replace(/<style[\s\S]*?<\/style>/gi, '')
+        .replace(/<ix:hidden\b[\s\S]*?<\/ix:hidden>/gi, '')
         .replace(/<br\s*\/?\s*>/gi, ' ')
         .replace(/<\/p>|<\/td>|<\/tr>|<\/table>/gi, ' ')
-        .replace(/<[^>]+>/g, ' ')
-        .replace(/&#160;|&nbsp;/g, ' ')
-        .replace(/&#8217;/g, "'")
-        .replace(/&amp;/g, '&')
+        .replace(/<[^>]+>/g, ' '))
+        .replace(/[\u2013\u2014\u2212]/g, '-')
         .replace(/\s+/g, ' ')
         .trim();
-}
-
-function sliceBetween(text, startMarker, endMarker) {
-    const start = text.indexOf(startMarker);
-    if (start === -1) {
-        return '';
-    }
-    const end = text.indexOf(endMarker, start + startMarker.length);
-    return end === -1 ? text.slice(start) : text.slice(start, end);
 }
 
 function toIsoDate(dateText) {
@@ -275,7 +380,9 @@ function getArgValue(name) {
     return index === -1 ? '' : process.argv[index + 1] || '';
 }
 
-main().catch((err) => {
-    console.error(err);
-    process.exit(1);
-});
+if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {
+    main().catch((err) => {
+        console.error(err);
+        process.exitCode = 1;
+    });
+}
