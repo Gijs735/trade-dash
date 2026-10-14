@@ -159,6 +159,7 @@ async function evaluateMstrPosition(shares, averagePriceUsd) {
     ]);
     const mstrPriceEur = mstrPriceUsd * usdEurRate;
     const positionValueEur = shares * mstrPriceEur;
+    const positionValueBtc = positionValueEur / (btcPriceUsd * usdEurRate);
     const costBasisEur = shares * averagePriceUsd * usdEurRate;
     const profitLossEur = positionValueEur - costBasisEur;
     const profitLossPercent = ((mstrPriceUsd - averagePriceUsd) / averagePriceUsd) * 100;
@@ -170,6 +171,7 @@ async function evaluateMstrPosition(shares, averagePriceUsd) {
         mstrPriceUsd,
         btcPriceUsd,
         positionValueEur,
+        positionValueBtc,
         profitLossEur,
         profitLossPercent,
         netSatsPerShare,
@@ -227,6 +229,7 @@ async function updateTradeInfo() {
             percent: plusminus + result.profitLossPercent.toFixed(2) + '%'
         };
         const metricDetails = {
+            total: `≈ ${formatBtc(result.positionValueBtc, 4)} BTC equivalent`,
             delta: result.mnav === null ? '' : `${formatBtc(result.netBtcExposure, 4)} net BTC exposure · ${result.mnav.toFixed(2)}x mNAV`,
             percent: `${formatSignedEur(result.profitLossEur, 0)} vs entry`
         };
