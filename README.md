@@ -5,23 +5,7 @@ Dashboard to follow and track my swing trades
 
 The GitHub Actions workflow in `.github/workflows/deploy-azure-storage.yml`
 deploys the static website to Azure Blob Storage on every push to `main`, and
-can also be started manually from the Actions tab. It also runs on weekday
-schedule and refreshes `strategy-inputs.json` from Strategy's latest SEC 8-K
-before uploading the static files. When the filing inputs change, the workflow
-commits the refreshed `strategy-inputs.json` back to `main` so future runs start
-from the latest saved state.
-
-To refresh the local filing inputs without deploying:
-
-```sh
-node scripts/update-strategy-inputs.mjs
-```
-
-Set the `SEC_USER_AGENT` repository secret or variable to identify a specific
-contact for SEC requests. This is required in GitHub Actions. SEC recommends a
-declared User-Agent with contact information, for example
-`trade-dash company you@example.com`. The updater automatically sends that
-contact string with a Chrome-style browser User-Agent prefix.
+can also be started manually from the Actions tab.
 
 Configure these repository secrets:
 

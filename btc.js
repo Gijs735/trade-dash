@@ -11,8 +11,8 @@ const chartUpColor = '#4aa38c';
 const chartDownColor = '#ef5350';
 const tradingViewScanUrl = 'https://scanner.tradingview.com/america/scan';
 const fallbackMstrPriceUsd = 124.80;
-const strategyInputsUrl = 'strategy-inputs.json';
-const strategyInputsCacheTtlMs = 15 * 60 * 1000;
+const strategyKpisUrl = 'https://api.strategy.com/btc/bitcoinKpis';
+const strategyKpisCacheTtlMs = 60 * 1000;
 const tradingViewMstrColumns = [
     'close',
     'currency',
@@ -21,7 +21,7 @@ const tradingViewMstrColumns = [
 ];
 let mstrShares = 3333;
 let mstrAveragePriceUsd = 123.70;
-let strategyInputsCache;
+let strategyKpisCache;
 let hasLoadedPriceChart = false;
 let hasPreloadedPriceChart = false;
 let lightweightChartsLoadPromise;
@@ -151,20 +151,19 @@ function getNewYorkMarketSession(date = new Date()) {
 }
 
 async function evaluateMstrPosition(shares, averagePriceUsd) {
-    const [btcPriceUsd, usdEurRate, mstrPriceUsd, strategyInputs] = await Promise.all([
+    const [btcPriceUsd, usdEurRate, mstrPriceUsd, strategyKpis] = await Promise.all([
         getBTCPriceUSD(),
         getUsdEurRate(),
         getMstrPriceUsd(),
-        getStrategyMnavInputs()
+        getStrategyKpis()
     ]);
     const mstrPriceEur = mstrPriceUsd * usdEurRate;
     const positionValueEur = shares * mstrPriceEur;
     const costBasisEur = shares * averagePriceUsd * usdEurRate;
     const profitLossEur = positionValueEur - costBasisEur;
     const profitLossPercent = ((mstrPriceUsd - averagePriceUsd) / averagePriceUsd) * 100;
-    const { mnav, netBtcPerShare } = strategyInputs
-        ? calculateStrategyMnav(strategyInputs, mstrPriceUsd, btcPriceUsd)
-        : { mnav: null, netBtcPerShare: null };
+    const { mnav, netSatsPerShare } = strategyKpis ?? { mnav: null, netSatsPerShare: null };
+    const netBtcPerShare = netSatsPerShare === null ? null : netSatsPerShare / 100000000;
     const netBtcExposure = netBtcPerShare === null ? null : netBtcPerShare * shares;
 
     return {
@@ -173,66 +172,45 @@ async function evaluateMstrPosition(shares, averagePriceUsd) {
         positionValueEur,
         profitLossEur,
         profitLossPercent,
-        netBtcPerShare,
+        netSatsPerShare,
         netBtcExposure,
         mnav,
         isProfitable: profitLossEur >= 0
     };
 }
 
-async function getStrategyMnavInputs() {
-    if (strategyInputsCache && Date.now() - strategyInputsCache.fetchedAt < strategyInputsCacheTtlMs) {
-        return strategyInputsCache.inputs;
+async function getStrategyKpis() {
+    if (strategyKpisCache && Date.now() - strategyKpisCache.fetchedAt < strategyKpisCacheTtlMs) {
+        return strategyKpisCache.values;
     }
 
     try {
-        const response = await fetch(strategyInputsUrl, { cache: 'no-store' });
+        const response = await fetch(strategyKpisUrl, { cache: 'no-store' });
         if (!response.ok) {
             throw new Error(`Request Failed. Status Code: ${response.status}`);
         }
 
-        const inputs = normalizeStrategyInputs(await response.json());
-        strategyInputsCache = {
+        const values = normalizeStrategyKpis(await response.json());
+        strategyKpisCache = {
             fetchedAt: Date.now(),
-            inputs
+            values
         };
-        return inputs;
+        return values;
     } catch (err) {
-        console.warn('Strategy filing inputs unavailable', err);
-        return strategyInputsCache?.inputs ?? null;
+        console.warn('Strategy KPI feed unavailable', err);
+        return strategyKpisCache?.values ?? null;
     }
 }
 
-function normalizeStrategyInputs(inputs) {
-    const normalized = {
-        btcHoldings: Number(inputs?.btcHoldings),
-        usdAssets: Number(inputs?.usdAssets),
-        debt: Number(inputs?.debt),
-        preferred: Number(inputs?.preferred),
-        dilutedShares: Number(inputs?.dilutedShares)
-    };
-
-    if (Object.entries(normalized).every(([key, value]) => inputs?.[key] != null && Number.isFinite(value) && value >= 0)
-        && normalized.btcHoldings > 0 && normalized.dilutedShares > 0) {
-        return normalized;
+function normalizeStrategyKpis(payload) {
+    const results = payload?.results;
+    const netSatsPerShare = Number(results?.netSatsPerShare);
+    const mnav = Number(results?.mNav);
+    if (Number.isFinite(netSatsPerShare) && netSatsPerShare > 0 && Number.isFinite(mnav) && mnav > 0) {
+        return { netSatsPerShare, mnav };
     }
 
-    throw new Error('Strategy filing inputs are incomplete');
-}
-
-function calculateStrategyMnav(strategyMnavInputs, mstrPriceUsd, btcPriceUsd) {
-    const netReserveUsd = (
-        strategyMnavInputs.btcHoldings * btcPriceUsd
-        + strategyMnavInputs.usdAssets
-        - strategyMnavInputs.debt
-        - strategyMnavInputs.preferred
-    );
-    const netReservePerShareUsd = netReserveUsd / strategyMnavInputs.dilutedShares;
-
-    return {
-        netBtcPerShare: netReservePerShareUsd / btcPriceUsd,
-        mnav: mstrPriceUsd / netReservePerShareUsd
-    };
+    throw new Error('Strategy KPI feed is missing net sats/share or mNAV');
 }
 
 async function updateTradeInfo() {
@@ -245,11 +223,11 @@ async function updateTradeInfo() {
         const metricText = {
             total: formatEur(result.positionValueEur, 0),
             currentPrice: `$${formatNumber(result.mstrPriceUsd, 2)}`,
-            delta: result.netBtcPerShare === null ? 'N/A' : formatSats(result.netBtcPerShare),
+            delta: result.netSatsPerShare === null ? 'N/A' : formatNumber(result.netSatsPerShare, 0),
             percent: plusminus + result.profitLossPercent.toFixed(2) + '%'
         };
         const metricDetails = {
-            delta: result.mnav === null ? '' : `${formatBtc(result.netBtcExposure, 4)} net BTC exposure · ${result.mnav.toFixed(2)}x current mNAV`,
+            delta: result.mnav === null ? '' : `${formatBtc(result.netBtcExposure, 4)} net BTC exposure · ${result.mnav.toFixed(2)}x mNAV`,
             percent: `${formatSignedEur(result.profitLossEur, 0)} vs entry`
         };
 
@@ -951,10 +929,6 @@ function formatSignedEur(value, digits = 2) {
 
 function formatBtc(value, digits = 4) {
     return `₿ ${formatNumber(value, digits)}`;
-}
-
-function formatSats(btcValue) {
-    return formatNumber(btcValue * 100000000, 0);
 }
 
 function formatNumber(value, digits = 0) {

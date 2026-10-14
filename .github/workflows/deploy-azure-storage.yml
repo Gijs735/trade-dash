@@ -5,11 +5,8 @@ on:
     branches:
       - main
   workflow_dispatch:
-  schedule:
-    - cron: '45 13 * * 1-5'
-
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: azure-storage-deploy
@@ -28,27 +25,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Refresh Strategy filing inputs
-        env:
-          SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT || vars.SEC_USER_AGENT }}
-        run: |
-          node --test scripts/update-strategy-inputs.test.mjs
-          node scripts/update-strategy-inputs.mjs
-
-      - name: Persist Strategy filing inputs
-        if: github.ref == 'refs/heads/main'
-        run: |
-          if git diff --quiet -- strategy-inputs.json; then
-            echo "Strategy filing inputs unchanged."
-            exit 0
-          fi
-
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add strategy-inputs.json
-          git commit -m "Update Strategy filing inputs [skip ci]"
-          git push
-
       - name: Prepare site files
         run: |
           mkdir -p _site
@@ -56,7 +32,6 @@ jobs:
             --exclude '.git/' \
             --exclude '.github/' \
             --exclude '_site/' \
-            --exclude 'scripts/' \
             --exclude 'LICENSE' \
             --exclude 'README.md' \
             ./ _site/
